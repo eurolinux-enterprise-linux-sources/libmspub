@@ -1,29 +1,10 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* libmspub
- * Version: MPL 1.1 / GPLv2+ / LGPLv2+
+/*
+ * This file is part of the libmspub project.
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License or as specified alternatively below. You may obtain a copy of
- * the License at http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * Major Contributor(s):
- * Copyright (C) 2012 Brennan Vincent <brennanv@email.arizona.edu>
- *
- * All Rights Reserved.
- *
- * For minor contributions see the git repository.
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPLv2+"), or
- * the GNU Lesser General Public License Version 2 or later (the "LGPLv2+"),
- * in which case the provisions of the GPLv2+ or the LGPLv2+ are applicable
- * instead of those above.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
 #ifndef __POLYGONUTILS_H__
@@ -31,7 +12,7 @@
 
 #include <vector>
 
-#include <libwpg/libwpg.h>
+#include <librevenge/librevenge.h>
 #include <boost/function.hpp>
 #include <boost/shared_ptr.hpp>
 
@@ -92,7 +73,7 @@ struct CustomShape
   unsigned m_numGluePoints;
   unsigned char m_adjustShiftMask;
 
-  Coordinate getTextRectangle(double x, double y, double width, double height, boost::function<double (unsigned index)> calculator) const;
+  Coordinate getTextRectangle(double x, double y, double width, double height, boost::function<double(unsigned index)> calculator) const;
 
   CustomShape(const Vertex *p_vertices, unsigned numVertices, const unsigned short *p_elements, unsigned numElements, const Calculation *p_calculations, unsigned numCalculations, const int *p_defaultAdjustValues, unsigned numDefaultAdjustValues, const TextRectangle *p_textRectangles, unsigned numTextRectangles, unsigned coordWidth, unsigned coordHeight, const Vertex *p_gluePoints, unsigned numGluePoints, unsigned char adjustShiftMask = 0) :
     mp_vertices(p_vertices), m_numVertices(numVertices),
@@ -133,8 +114,8 @@ boost::shared_ptr<const CustomShape> getFromDynamicCustomShape(const DynamicCust
 
 const CustomShape *getCustomShape(ShapeType type);
 bool isShapeTypeRectangle(ShapeType type);
-WPXPropertyList calcClipPath(const std::vector<libmspub::Vertex> &verts, double x, double y, double height, double width, VectorTransformation2D transform, boost::shared_ptr<const CustomShape> shape);
-void writeCustomShape(ShapeType shapeType, WPXPropertyList &graphicsProps, libwpg::WPGPaintInterface *painter, double x, double y, double height, double width, bool closeEverything, VectorTransformation2D transform, std::vector<Line> lines, boost::function<double(unsigned index)> calculator, const std::vector<Color> &palette, boost::shared_ptr<const CustomShape> shape);
+librevenge::RVNGPropertyList calcClipPath(const std::vector<libmspub::Vertex> &verts, double x, double y, double height, double width, VectorTransformation2D transform, boost::shared_ptr<const CustomShape> shape);
+void writeCustomShape(ShapeType shapeType, librevenge::RVNGPropertyList &graphicsProps, librevenge::RVNGDrawingInterface *painter, double x, double y, double height, double width, bool closeEverything, VectorTransformation2D transform, std::vector<Line> lines, boost::function<double(unsigned index)> calculator, const std::vector<Color> &palette, boost::shared_ptr<const CustomShape> shape);
 
 } // libmspub
 #endif /* __POLYGONUTILS_H__ */

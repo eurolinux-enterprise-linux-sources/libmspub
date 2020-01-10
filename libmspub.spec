@@ -1,21 +1,20 @@
-%global apiversion 0.0
+%global apiversion 0.1
 
 Name: libmspub
-Version: 0.0.6
-Release: 3%{?dist}
-Summary: A library providing ability to interpret and import Microsoft Publisher files
+Version: 0.1.2
+Release: 1%{?dist}
+Summary: A library for import of Microsoft Publisher documents
 
-Group: System Environment/Libraries
-License: GPLv2+ or LGPLv2+ or MPLv1.1
-URL: http://www.freedesktop.org/wiki/Software/libmspub
-Source: http://dev-www.libreoffice.org/src/%{name}-%{version}.tar.xz
+License: MPLv2.0
+URL: http://wiki.documentfoundation.org/DLP/Libraries/libmspub
+Source: http://dev-www.libreoffice.org/src/%{name}/%{name}-%{version}.tar.xz
 
 BuildRequires: boost-devel
 BuildRequires: doxygen
-BuildRequires: libicu-devel
-BuildRequires: libwpd-devel
-BuildRequires: libwpg-devel
-BuildRequires: zlib-devel
+BuildRequires: help2man
+BuildRequires: pkgconfig(icu-i18n)
+BuildRequires: pkgconfig(librevenge-0.0)
+BuildRequires: pkgconfig(zlib)
 
 %description
 Libmspub is library providing ability to interpret and import Microsoft
@@ -24,7 +23,6 @@ in libreoffice.
 
 %package devel
 Summary: Development files for %{name}
-Group: Development/Libraries
 Requires: %{name}%{?_isa} = %{version}-%{release}
 
 %description devel
@@ -33,50 +31,49 @@ developing applications that use %{name}.
 
 %package doc
 Summary: Documentation of %{name} API
-Group: Documentation
 BuildArch: noarch
 
 %description doc
 The %{name}-doc package contains documentation files for %{name}.
 
 %package tools
-Summary: Tools to transform Microsoft Publisher files into other formats
-Group: Applications/Publishing
+Summary: Tools to transform Microsoft Publisher documents into other formats
 Requires: %{name}%{?_isa} = %{version}-%{release}
 
 %description tools
-Tools to transform Microsoft Publisher files into other formats.
+Tools to transform Microsoft Publisher documents into other formats.
 Currently supported: XHTML, raw.
-
 
 %prep
 %setup -q
 
-
 %build
-%configure --disable-static --disable-werror
+%configure --disable-static --disable-werror --disable-silent-rules
 sed -i \
     -e 's|^hardcode_libdir_flag_spec=.*|hardcode_libdir_flag_spec=""|g' \
     -e 's|^runpath_var=LD_RUN_PATH|runpath_var=DIE_RPATH_DIE|g' \
     libtool
 make %{?_smp_mflags}
 
+export LD_LIBRARY_PATH=`pwd`/src/lib/.libs${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+help2man -N -n 'debug the conversion library' -o pub2raw.1 ./src/conv/raw/.libs/pub2raw
+help2man -N -n 'convert Publisher document into SVG' -o pub2xhtml.1 ./src/conv/svg/.libs/pub2xhtml
 
 %install
 make install DESTDIR=%{buildroot}
 rm -f %{buildroot}/%{_libdir}/*.la
+# rhbz#1001245 we install API docs directly from build
+rm -rf %{buildroot}/%{_docdir}/%{name}
 
+install -m 0755 -d %{buildroot}/%{_mandir}/man1
+install -m 0644 pub2*.1 %{buildroot}/%{_mandir}/man1
 
 %post -p /sbin/ldconfig
-
-
 %postun -p /sbin/ldconfig
-
 
 %files
 %doc AUTHORS COPYING.*
 %{_libdir}/%{name}-%{apiversion}.so.*
-
 
 %files devel
 %doc ChangeLog
@@ -84,19 +81,20 @@ rm -f %{buildroot}/%{_libdir}/*.la
 %{_libdir}/%{name}-%{apiversion}.so
 %{_libdir}/pkgconfig/%{name}-%{apiversion}.pc
 
-
 %files doc
 %doc COPYING.*
-%dir %{_docdir}/%{name}
-%{_docdir}/%{name}/html
-
+%doc docs/doxygen/html
 
 %files tools
 %{_bindir}/pub2raw
 %{_bindir}/pub2xhtml
-
+%{_mandir}/man1/pub2raw.1*
+%{_mandir}/man1/pub2xhtml.1*
 
 %changelog
+* Fri Apr 17 2015 David Tardon <dtardon@redhat.com> - 0.1.2-1
+- Resolves: rhbz#1207755 rebase to 0.1.2
+
 * Fri Jan 24 2014 Daniel Mach <dmach@redhat.com> - 0.0.6-3
 - Mass rebuild 2014-01-24
 

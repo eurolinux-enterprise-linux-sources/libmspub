@@ -1,30 +1,12 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* libmspub
- * Version: MPL 1.1 / GPLv2+ / LGPLv2+
+/*
+ * This file is part of the libmspub project.
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License or as specified alternatively below. You may obtain a copy of
- * the License at http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * Major Contributor(s):
- * Copyright (C) 2012 Brennan Vincent <brennanv@email.arizona.edu>
- *
- * All Rights Reserved.
- *
- * For minor contributions see the git repository.
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPLv2+"), or
- * the GNU Lesser General Public License Version 2 or later (the "LGPLv2+"),
- * in which case the provisions of the GPLv2+ or the LGPLv2+ are applicable
- * instead of those above.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
+
 #ifndef __SHAPEINFO_H__
 #define __SHAPEINFO_H__
 #include <boost/optional.hpp>
@@ -71,7 +53,6 @@ struct ShapeInfo
   boost::optional<ColorReference> m_lineBackColor;
   boost::optional<Dash> m_dash;
   boost::optional<TableInfo> m_tableInfo;
-  boost::optional<std::vector<unsigned> > m_tableCellTextEnds;
   boost::optional<unsigned> m_numColumns;
   unsigned m_columnSpacing;
   boost::optional<Arrow> m_beginArrow;
@@ -89,18 +70,18 @@ struct ShapeInfo
     m_rotation(), m_flips(), m_margins(), m_borderPosition(),
     m_fill(), m_customShape(), m_stretchBorderArt(false),
     m_lineBackColor(), m_dash(), m_tableInfo(),
-    m_tableCellTextEnds(), m_numColumns(),
+    m_numColumns(),
     m_columnSpacing(0), m_beginArrow(), m_endArrow(),
     m_verticalAlign(), m_pictureRecolor(), m_shadow(), m_innerRotation(), m_clipPath(), m_pictureBrightness(), m_pictureContrast()
   {
   }
   boost::shared_ptr<const CustomShape> getCustomShape() const
   {
-    if (!!m_customShape)
+    if (bool(m_customShape))
     {
       return getFromDynamicCustomShape(m_customShape.get());
     }
-    if (!!m_cropType)
+    if (bool(m_cropType))
     {
       return boost::shared_ptr<const CustomShape>(
                libmspub::getCustomShape(m_cropType.get()),

@@ -1,34 +1,15 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* libmspub
- * Version: MPL 1.1 / GPLv2+ / LGPLv2+
+/*
+ * This file is part of the libmspub project.
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License or as specified alternatively below. You may obtain a copy of
- * the License at http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * Major Contributor(s):
- * Copyright (C) 2012-2013 Brennan Vincent <brennanv@email.arizona.edu>
- * Copyright (C) 2012 Fridrich Strba <fridrich.strba@bluewin.ch>
- *
- *
- * All Rights Reserved.
- *
- * For minor contributions see the git repository.
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPLv2+"), or
- * the GNU Lesser General Public License Version 2 or later (the "LGPLv2+"),
- * in which case the provisions of the GPLv2+ or the LGPLv2+ are applicable
- * instead of those above.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
 #include <math.h>
+
+#include <boost/multi_array.hpp>
 
 #include <unicode/ucsdet.h>
 
@@ -39,76 +20,293 @@
 #include "PolygonUtils.h"
 #include "Coordinate.h"
 
-#pragma GCC diagnostic ignored "-Wpragmas"
-#pragma GCC diagnostic ignored "-Wuninitialized"
-#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-
-WPXBinaryData &libmspub::MSPUBCollector::addEOTFont(const WPXString &name)
+namespace libmspub
 {
-  m_embeddedFonts.push_back(EmbeddedFontInfo(name));
-  return m_embeddedFonts.back().m_blob;
+
+namespace
+{
+
+static void separateTabsAndInsertText(librevenge::RVNGDrawingInterface *iface, const librevenge::RVNGString &text)
+{
+  if (!iface || text.empty())
+    return;
+  librevenge::RVNGString tmpText;
+  librevenge::RVNGString::Iter i(text);
+  for (i.rewind(); i.next();)
+  {
+    if (*(i()) == '\t')
+    {
+      if (!tmpText.empty())
+      {
+        if (iface)
+          iface->insertText(tmpText);
+        tmpText.clear();
+      }
+
+      if (iface)
+        iface->insertTab();
+    }
+    else if (*(i()) == '\n')
+    {
+      if (!tmpText.empty())
+      {
+        if (iface)
+          iface->insertText(tmpText);
+        tmpText.clear();
+      }
+
+      if (iface)
+        iface->insertLineBreak();
+    }
+    else
+    {
+      tmpText.append(i());
+    }
+  }
+  if (iface && !tmpText.empty())
+    iface->insertText(tmpText);
 }
 
-void libmspub::MSPUBCollector::setShapePictureRecolor(unsigned seqNum,
-    const ColorReference &recolor)
+static void separateSpacesAndInsertText(librevenge::RVNGDrawingInterface *iface, const librevenge::RVNGString &text)
+{
+  if (!iface)
+    return;
+  if (text.empty())
+  {
+    iface->insertText(text);
+    return;
+  }
+  librevenge::RVNGString tmpText;
+  int numConsecutiveSpaces = 0;
+  librevenge::RVNGString::Iter i(text);
+  for (i.rewind(); i.next();)
+  {
+    if (*(i()) == ' ')
+      numConsecutiveSpaces++;
+    else
+      numConsecutiveSpaces = 0;
+
+    if (numConsecutiveSpaces > 1)
+    {
+      if (!tmpText.empty())
+      {
+        separateTabsAndInsertText(iface, tmpText);
+        tmpText.clear();
+      }
+
+      if (iface)
+        iface->insertSpace();
+    }
+    else
+    {
+      tmpText.append(i());
+    }
+  }
+  separateTabsAndInsertText(iface, tmpText);
+}
+
+struct TableLayoutCell
+{
+  TableLayoutCell()
+    : m_cell(0)
+    , m_rowSpan(0)
+    , m_colSpan(0)
+  {
+  }
+
+  unsigned m_cell;
+  unsigned m_rowSpan;
+  unsigned m_colSpan;
+};
+
+bool isCovered(const TableLayoutCell &cell)
+{
+  assert((cell.m_rowSpan == 0) == (cell.m_colSpan == 0));
+  return (cell.m_rowSpan == 0) && (cell.m_colSpan == 0);
+}
+
+typedef boost::multi_array<TableLayoutCell, 2> TableLayout;
+
+void createTableLayout(const std::vector<CellInfo> &cells, TableLayout &tableLayout)
+{
+  for (std::vector<CellInfo>::const_iterator it = cells.begin(); it != cells.end(); ++it)
+  {
+    if ((it->m_endRow >= tableLayout.shape()[0]) || (it->m_endColumn >= tableLayout.shape()[1]))
+    {
+      MSPUB_DEBUG_MSG((
+                        "cell %u (rows %u to %u, columns %u to %u) overflows the table, ignoring\n",
+                        unsigned(int(it - cells.begin())),
+                        it->m_startRow, it->m_endRow,
+                        it->m_startColumn, it->m_endColumn
+                      ));
+      continue;
+    }
+    if (it->m_startRow > it->m_endRow)
+    {
+      MSPUB_DEBUG_MSG((
+                        "cell %u (rows %u to %u) has got negative row span, ignoring\n",
+                        unsigned(int(it - cells.begin())),
+                        it->m_startRow, it->m_endRow
+                      ));
+      continue;
+    }
+    if (it->m_startColumn > it->m_endColumn)
+    {
+      MSPUB_DEBUG_MSG((
+                        "cell %u (columns %u to %u) has got negative column span, ignoring\n",
+                        unsigned(int(it - cells.begin())),
+                        it->m_startColumn, it->m_endColumn
+                      ));
+      continue;
+    }
+
+    const unsigned rowSpan = it->m_endRow - it->m_startRow + 1;
+    const unsigned colSpan = it->m_endColumn - it->m_startColumn + 1;
+
+    if ((rowSpan == 0) != (colSpan == 0))
+    {
+      MSPUB_DEBUG_MSG((
+                        "cell %u (rows %u to %u, columns %u to %u) has got 0 span in one dimension, ignoring\n",
+                        unsigned(int(it - cells.begin())),
+                        it->m_startRow, it->m_endRow,
+                        it->m_startColumn, it->m_endColumn
+                      ));
+      continue;
+    }
+
+    TableLayoutCell &layoutCell = tableLayout[it->m_startRow][it->m_startColumn];
+    layoutCell.m_cell = unsigned(int(it - cells.begin()));
+    layoutCell.m_rowSpan = rowSpan;
+    layoutCell.m_colSpan = colSpan;
+  }
+}
+
+typedef std::vector<std::pair<unsigned, unsigned> > ParagraphToCellMap_t;
+typedef std::vector<librevenge::RVNGString> SpanTexts_t;
+typedef std::vector<SpanTexts_t> ParagraphTexts_t;
+
+void mapTableTextToCells(
+  const std::vector<TextParagraph> &text,
+  const std::vector<unsigned> &tableCellTextEnds,
+  const char *const encoding,
+  ParagraphToCellMap_t &paraToCellMap,
+  ParagraphTexts_t &paraTexts
+)
+{
+  assert(paraToCellMap.empty());
+  assert(paraTexts.empty());
+
+  paraToCellMap.reserve(tableCellTextEnds.size());
+  paraTexts.reserve(tableCellTextEnds.size());
+
+  unsigned firstPara = 0;
+  unsigned offset = 1;
+  for (unsigned para = 0; para != text.size(); ++para)
+  {
+    paraTexts.push_back(SpanTexts_t());
+    paraTexts.back().reserve(text[para].spans.size());
+
+    for (unsigned i_spans = 0; i_spans != text[para].spans.size(); ++i_spans)
+    {
+      librevenge::RVNGString textString;
+      appendCharacters(textString, text[para].spans[i_spans].chars, encoding);
+      offset += textString.len();
+      // TODO: why do we not drop these during parse already?
+      if ((i_spans == text[para].spans.size() - 1) && (textString == "\r"))
+        continue;
+      paraTexts.back().push_back(textString);
+    }
+
+    assert(paraTexts.back().size() <= text[para].spans.size());
+
+    if ((paraToCellMap.size() < tableCellTextEnds.size()))
+    {
+      if (offset > tableCellTextEnds[paraToCellMap.size()])
+      {
+        MSPUB_DEBUG_MSG(("text of cell %u ends in the middle of a paragraph!\n", unsigned(paraToCellMap.size())));
+      }
+
+      paraToCellMap.push_back(std::make_pair(firstPara, para));
+      firstPara = para + 1;
+    }
+  }
+
+  assert(paraTexts.size() == text.size());
+  assert(paraToCellMap.size() <= tableCellTextEnds.size());
+}
+
+} // anonymous namespace
+
+void MSPUBCollector::collectMetaData(const librevenge::RVNGPropertyList &metaData)
+{
+  m_metaData = metaData;
+}
+
+void MSPUBCollector::addEOTFont(const librevenge::RVNGString &name, const librevenge::RVNGBinaryData &data)
+{
+  m_embeddedFonts.push_back(EmbeddedFontInfo(name, data));
+}
+
+void MSPUBCollector::setShapePictureRecolor(unsigned seqNum,
+                                            const ColorReference &recolor)
 {
   m_shapeInfosBySeqNum[seqNum].m_pictureRecolor = recolor;
 }
 
-void libmspub::MSPUBCollector::setShapePictureBrightness(unsigned seqNum,
-    int brightness)
+void MSPUBCollector::setShapePictureBrightness(unsigned seqNum,
+                                               int brightness)
 {
   m_shapeInfosBySeqNum[seqNum].m_pictureBrightness = brightness;
 }
 
-void libmspub::MSPUBCollector::setShapePictureContrast(unsigned seqNum,
-    int contrast)
+void MSPUBCollector::setShapePictureContrast(unsigned seqNum,
+                                             int contrast)
 {
   m_shapeInfosBySeqNum[seqNum].m_pictureContrast = contrast;
 }
 
-void libmspub::MSPUBCollector::setShapeBeginArrow(unsigned seqNum,
-    const Arrow &arrow)
+void MSPUBCollector::setShapeBeginArrow(unsigned seqNum,
+                                        const Arrow &arrow)
 {
   m_shapeInfosBySeqNum[seqNum].m_beginArrow = arrow;
 }
 
-void libmspub::MSPUBCollector::setShapeVerticalTextAlign(unsigned seqNum,
-    VerticalAlign va)
+void MSPUBCollector::setShapeVerticalTextAlign(unsigned seqNum,
+                                               VerticalAlign va)
 {
   m_shapeInfosBySeqNum[seqNum].m_verticalAlign = va;
 }
 
-void libmspub::MSPUBCollector::setShapeEndArrow(unsigned seqNum,
-    const Arrow &arrow)
+void MSPUBCollector::setShapeEndArrow(unsigned seqNum,
+                                      const Arrow &arrow)
 {
   m_shapeInfosBySeqNum[seqNum].m_endArrow = arrow;
 }
 
-void libmspub::MSPUBCollector::setShapeTableInfo(unsigned seqNum,
-    const TableInfo &ti)
+void MSPUBCollector::setShapeTableInfo(unsigned seqNum,
+                                       const TableInfo &ti)
 {
   m_shapeInfosBySeqNum[seqNum].m_tableInfo = ti;
 }
 
-void libmspub::MSPUBCollector::setShapeNumColumns(unsigned seqNum,
-    unsigned numColumns)
+void MSPUBCollector::setShapeNumColumns(unsigned seqNum,
+                                        unsigned numColumns)
 {
   m_shapeInfosBySeqNum[seqNum].m_numColumns = numColumns;
 }
 
-void libmspub::MSPUBCollector::setShapeColumnSpacing(unsigned seqNum,
-    unsigned spacing)
+void MSPUBCollector::setShapeColumnSpacing(unsigned seqNum,
+                                           unsigned spacing)
 {
   m_shapeInfosBySeqNum[seqNum].m_columnSpacing = spacing;
 }
 
-void libmspub::MSPUBCollector::setShapeStretchBorderArt(unsigned seqNum)
+void MSPUBCollector::setShapeStretchBorderArt(unsigned seqNum)
 {
   m_shapeInfosBySeqNum[seqNum].m_stretchBorderArt = true;
 }
 
-void libmspub::MSPUBCollector::setRectCoordProps(Coordinate coord, WPXPropertyList *props) const
+void MSPUBCollector::setRectCoordProps(Coordinate coord, librevenge::RVNGPropertyList *props) const
 {
   int xs = coord.m_xs, ys = coord.m_ys, xe = coord.m_xe, ye = coord.m_ye;
   double x_center = m_width / 2;
@@ -119,28 +317,28 @@ void libmspub::MSPUBCollector::setRectCoordProps(Coordinate coord, WPXPropertyLi
   props->insert("svg:height", (double)(ye - ys) / EMUS_IN_INCH);
 }
 
-libmspub::Coordinate getFudgedCoordinates(libmspub::Coordinate coord, const std::vector<libmspub::Line> &lines, bool makeBigger, libmspub::BorderPosition borderPosition)
+Coordinate getFudgedCoordinates(Coordinate coord, const std::vector<Line> &lines, bool makeBigger, BorderPosition borderPosition)
 {
-  libmspub::Coordinate fudged = coord;
+  Coordinate fudged = coord;
   unsigned topFudge = 0;
   unsigned rightFudge = 0;
   unsigned bottomFudge = 0;
   unsigned leftFudge = 0;
   switch (borderPosition)
   {
-  case libmspub::HALF_INSIDE_SHAPE:
+  case HALF_INSIDE_SHAPE:
     topFudge = (!lines.empty()) ? lines[0].m_widthInEmu / 2 : 0;
     rightFudge = (lines.size() > 1) ? lines[1].m_widthInEmu / 2 : 0;
     bottomFudge = (lines.size() > 2) ? lines[2].m_widthInEmu / 2 : 0;
     leftFudge = (lines.size() > 3) ? lines[3].m_widthInEmu / 2 : 0;
     break;
-  case libmspub::OUTSIDE_SHAPE:
+  case OUTSIDE_SHAPE:
     topFudge = (!lines.empty()) ? lines[0].m_widthInEmu : 0;
     rightFudge = (lines.size() > 1) ? lines[1].m_widthInEmu : 0;
     bottomFudge = (lines.size() > 2) ? lines[2].m_widthInEmu : 0;
     leftFudge = (lines.size() > 3) ? lines[3].m_widthInEmu : 0;
     break;
-  case libmspub::INSIDE_SHAPE:
+  case INSIDE_SHAPE:
   default:
     break;
   }
@@ -161,7 +359,7 @@ libmspub::Coordinate getFudgedCoordinates(libmspub::Coordinate coord, const std:
   return fudged;
 }
 
-void libmspub::MSPUBCollector::setNextPage(unsigned pageSeqNum)
+void MSPUBCollector::setNextPage(unsigned pageSeqNum)
 {
   m_pageSeqNumsOrdered.push_back(pageSeqNum);
 }
@@ -170,7 +368,7 @@ void libmspub::MSPUBCollector::setNextPage(unsigned pageSeqNum)
 #define M_PI 3.14159265358979323846
 #endif
 
-libmspub::MSPUBCollector::MSPUBCollector(libwpg::WPGPaintInterface *painter) :
+MSPUBCollector::MSPUBCollector(librevenge::RVNGDrawingInterface *painter) :
   m_painter(painter), m_contentChunkReferences(), m_width(0), m_height(0),
   m_widthSet(false), m_heightSet(false),
   m_numPages(0), m_textStringsById(), m_pagesBySeqNum(),
@@ -185,61 +383,62 @@ libmspub::MSPUBCollector::MSPUBCollector(libwpg::WPGPaintInterface *painter) :
   m_shapeInfosBySeqNum(), m_masterPages(),
   m_shapesWithCoordinatesRotated90(),
   m_masterPagesByPageSeqNum(),
-  m_tableCellTextEndsVector(), m_stringOffsetsByTextId(),
+  m_tableCellTextEndsByTextId(), m_stringOffsetsByTextId(),
   m_calculationValuesSeen(), m_pageSeqNumsOrdered(),
   m_encodingHeuristic(false), m_allText(),
-  m_calculatedEncoding()
+  m_calculatedEncoding(),
+  m_metaData()
 {
 }
 
-void libmspub::MSPUBCollector::setTextStringOffset(
+void MSPUBCollector::setTextStringOffset(
   unsigned textId, unsigned offset)
 {
   m_stringOffsetsByTextId[textId] = offset;
 }
 
-void libmspub::MSPUBCollector::setNextTableCellTextEnds(
-  const std::vector<unsigned> &ends)
+void MSPUBCollector::setTableCellTextEnds(
+  const unsigned textId, const std::vector<unsigned> &ends)
 {
-  m_tableCellTextEndsVector.push_back(ends);
+  m_tableCellTextEndsByTextId[textId] = ends;
 }
 
-void libmspub::MSPUBCollector::useEncodingHeuristic()
+void MSPUBCollector::useEncodingHeuristic()
 {
   m_encodingHeuristic = true;
 }
 
-void libmspub::MSPUBCollector::setShapeShadow(unsigned seqNum, const Shadow &shadow)
+void MSPUBCollector::setShapeShadow(unsigned seqNum, const Shadow &shadow)
 {
   m_shapeInfosBySeqNum[seqNum].m_shadow = shadow;
 }
 
-void libmspub::noop(const CustomShape *)
+void noop(const CustomShape *)
 {
 }
 
-void libmspub::MSPUBCollector::setShapeCoordinatesRotated90(unsigned seqNum)
+void MSPUBCollector::setShapeCoordinatesRotated90(unsigned seqNum)
 {
   m_shapesWithCoordinatesRotated90.insert(seqNum);
 }
 
-void libmspub::MSPUBCollector::setShapeBorderImageId(unsigned seqNum, unsigned id)
+void MSPUBCollector::setShapeBorderImageId(unsigned seqNum, unsigned id)
 {
   m_shapeInfosBySeqNum[seqNum].m_borderImgIndex = id;
 }
 
-void libmspub::MSPUBCollector::setShapeCustomPath(unsigned seqNum,
-    const DynamicCustomShape &shape)
+void MSPUBCollector::setShapeCustomPath(unsigned seqNum,
+                                        const DynamicCustomShape &shape)
 {
   m_shapeInfosBySeqNum[seqNum].m_customShape = shape;
 }
 
-void libmspub::MSPUBCollector::setShapeClipPath(unsigned seqNum, const std::vector<libmspub::Vertex> &clip)
+void MSPUBCollector::setShapeClipPath(unsigned seqNum, const std::vector<Vertex> &clip)
 {
   m_shapeInfosBySeqNum[seqNum].m_clipPath = clip;
 }
 
-void libmspub::MSPUBCollector::beginGroup()
+void MSPUBCollector::beginGroup()
 {
   ShapeGroupElement *tmp = new ShapeGroupElement(m_currentShapeGroup);
   if (!m_currentShapeGroup)
@@ -249,7 +448,7 @@ void libmspub::MSPUBCollector::beginGroup()
   m_currentShapeGroup = tmp;
 }
 
-bool libmspub::MSPUBCollector::endGroup()
+bool MSPUBCollector::endGroup()
 {
   if (!m_currentShapeGroup)
   {
@@ -259,32 +458,32 @@ bool libmspub::MSPUBCollector::endGroup()
   return true;
 }
 
-void libmspub::MSPUBCollector::addShapeLine(unsigned seqNum, Line line)
+void MSPUBCollector::addShapeLine(unsigned seqNum, Line line)
 {
   m_shapeInfosBySeqNum[seqNum].m_lines.push_back(line);
 }
 
-void libmspub::MSPUBCollector::setShapeBorderPosition(unsigned seqNum, BorderPosition pos)
+void MSPUBCollector::setShapeBorderPosition(unsigned seqNum, BorderPosition pos)
 {
   m_shapeInfosBySeqNum[seqNum].m_borderPosition = pos;
 }
 
-bool libmspub::MSPUBCollector::hasPage(unsigned seqNum) const
+bool MSPUBCollector::hasPage(unsigned seqNum) const
 {
   return m_pagesBySeqNum.find(seqNum) != m_pagesBySeqNum.end();
 }
 
-void libmspub::MSPUBCollector::setShapeMargins(unsigned seqNum, unsigned left, unsigned top, unsigned right, unsigned bottom)
+void MSPUBCollector::setShapeMargins(unsigned seqNum, unsigned left, unsigned top, unsigned right, unsigned bottom)
 {
   m_shapeInfosBySeqNum[seqNum].m_margins = Margins(left, top, right, bottom);
 }
 
-void libmspub::MSPUBCollector::setPageBgShape(unsigned pageSeqNum, unsigned seqNum)
+void MSPUBCollector::setPageBgShape(unsigned pageSeqNum, unsigned seqNum)
 {
   m_bgShapeSeqNumsByPageSeqNum[pageSeqNum] = seqNum;
 }
 
-bool libmspub::MSPUBCollector::setCurrentGroupSeqNum(unsigned seqNum)
+bool MSPUBCollector::setCurrentGroupSeqNum(unsigned seqNum)
 {
   if (!m_currentShapeGroup)
   {
@@ -295,7 +494,7 @@ bool libmspub::MSPUBCollector::setCurrentGroupSeqNum(unsigned seqNum)
   return true;
 }
 
-void libmspub::MSPUBCollector::setShapeOrder(unsigned seqNum)
+void MSPUBCollector::setShapeOrder(unsigned seqNum)
 {
   ShapeGroupElement *tmp = new ShapeGroupElement(m_currentShapeGroup, seqNum);
   if (!m_currentShapeGroup)
@@ -304,7 +503,7 @@ void libmspub::MSPUBCollector::setShapeOrder(unsigned seqNum)
   }
 }
 
-void libmspub::MSPUBCollector::addPaletteColor(Color c)
+void MSPUBCollector::addPaletteColor(Color c)
 {
   m_paletteColors.push_back(c);
 }
@@ -313,12 +512,12 @@ void no_op()
 {
 }
 
-void endShapeGroup(libwpg::WPGPaintInterface *painter)
+void endShapeGroup(librevenge::RVNGDrawingInterface *painter)
 {
   painter->endLayer();
 }
 
-std::vector<int> libmspub::MSPUBCollector::getShapeAdjustValues(const ShapeInfo &info) const
+std::vector<int> MSPUBCollector::getShapeAdjustValues(const ShapeInfo &info) const
 {
   std::vector<int> ret;
   boost::shared_ptr<const CustomShape> ptr_shape = info.getCustomShape();
@@ -343,9 +542,9 @@ std::vector<int> libmspub::MSPUBCollector::getShapeAdjustValues(const ShapeInfo 
   return ret;
 }
 
-boost::optional<std::vector<libmspub::TextParagraph> > libmspub::MSPUBCollector::getShapeText(const ShapeInfo &info) const
+boost::optional<std::vector<TextParagraph> > MSPUBCollector::getShapeText(const ShapeInfo &info) const
 {
-  if (!!info.m_textId)
+  if (bool(info.m_textId))
   {
     unsigned stringId = info.m_textId.get();
     const std::vector<TextParagraph> *ptr_str = getIfExists_const(m_textStringsById, stringId);
@@ -357,16 +556,16 @@ boost::optional<std::vector<libmspub::TextParagraph> > libmspub::MSPUBCollector:
   return boost::optional<std::vector<TextParagraph> >();
 }
 
-void libmspub::MSPUBCollector::setupShapeStructures(ShapeGroupElement &elt)
+void MSPUBCollector::setupShapeStructures(ShapeGroupElement &elt)
 {
   ShapeInfo *ptr_info = getIfExists(m_shapeInfosBySeqNum, elt.getSeqNum());
   if (ptr_info)
   {
-    if (!!ptr_info->m_imgIndex)
+    if (bool(ptr_info->m_imgIndex))
     {
       unsigned index = ptr_info->m_imgIndex.get();
       int rot = 0;
-      if (!!ptr_info->m_innerRotation)
+      if (bool(ptr_info->m_innerRotation))
         rot = ptr_info->m_innerRotation.get();
       if (index - 1 < m_images.size())
       {
@@ -385,24 +584,23 @@ void libmspub::MSPUBCollector::setupShapeStructures(ShapeGroupElement &elt)
 }
 
 
-boost::function<void(void)> libmspub::MSPUBCollector::paintShape(const ShapeInfo &info, const Coordinate &/* relativeTo*/, const VectorTransformation2D &foldedTransform, bool isGroup, const VectorTransformation2D &thisTransform) const
+boost::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, const Coordinate &/* relativeTo*/, const VectorTransformation2D &foldedTransform, bool isGroup, const VectorTransformation2D &thisTransform) const
 {
   std::vector<int> adjustValues = getShapeAdjustValues(info);
   if (isGroup)
   {
-    m_painter->startLayer(WPXPropertyList());
+    m_painter->startLayer(librevenge::RVNGPropertyList());
     return boost::bind(&endShapeGroup, m_painter);
   }
-  WPXPropertyList graphicsProps;
-  WPXPropertyListVector graphicsPropsVector;
+  librevenge::RVNGPropertyList graphicsProps;
   if (info.m_fill)
   {
-    graphicsPropsVector = info.m_fill->getProperties(&graphicsProps);
+    info.m_fill->getProperties(&graphicsProps);
   }
   bool hasStroke = false;
   bool hasBorderArt = false;
   boost::optional<unsigned> maybeBorderImg = info.m_borderImgIndex;
-  if (!!maybeBorderImg && !info.m_lines.empty())
+  if (bool(maybeBorderImg) && !info.m_lines.empty())
   {
     hasStroke = true;
     hasBorderArt = true;
@@ -418,10 +616,11 @@ boost::function<void(void)> libmspub::MSPUBCollector::paintShape(const ShapeInfo
       }
     }
   }
-  WPXString fill = graphicsProps["draw:fill"] ? graphicsProps["draw:fill"]->getStr() : "none";
+  librevenge::RVNGString fill = graphicsProps["draw:fill"] ? graphicsProps["draw:fill"]->getStr() : "none";
   bool hasFill = fill != "none";
   boost::optional<std::vector<TextParagraph> > maybeText = getShapeText(info);
-  bool hasText = !!maybeText;
+  bool hasText = bool(maybeText);
+  const bool isTable = bool(info.m_tableInfo);
   bool makeLayer = hasBorderArt ||
                    (hasStroke && hasFill) || (hasStroke && hasText) || (hasFill && hasText);
   if (makeLayer)
@@ -437,14 +636,14 @@ boost::function<void(void)> libmspub::MSPUBCollector::paintShape(const ShapeInfo
       m_painter->startLayer(calcClipPath(info.m_clipPath, x, y, height, width, foldedTransform, info.getCustomShape()));
     }
     else
-      m_painter->startLayer(WPXPropertyList());
+      m_painter->startLayer(librevenge::RVNGPropertyList());
   }
   graphicsProps.insert("draw:stroke", "none");
   const Coordinate &coord = info.m_coordinates.get_value_or(Coordinate());
   BorderPosition borderPosition =
     hasBorderArt ? INSIDE_SHAPE : info.m_borderPosition.get_value_or(HALF_INSIDE_SHAPE);
   ShapeType type;
-  if (!!info.m_cropType)
+  if (bool(info.m_cropType))
   {
     type = info.m_cropType.get();
   }
@@ -472,21 +671,21 @@ boost::function<void(void)> libmspub::MSPUBCollector::paintShape(const ShapeInfo
         width -= 2 * borderImgWidth;
       }
     }
-    if (!!info.m_pictureRecolor)
+    if (bool(info.m_pictureRecolor))
     {
       Color obc = info.m_pictureRecolor.get().getFinalColor(m_paletteColors);
       graphicsProps.insert("draw:color-mode", "greyscale");
       graphicsProps.insert("draw:red",
-                           static_cast<double>(obc.r) / 255.0, WPX_PERCENT);
+                           static_cast<double>(obc.r) / 255.0, librevenge::RVNG_PERCENT);
       graphicsProps.insert("draw:blue",
-                           static_cast<double>(obc.b) / 255.0, WPX_PERCENT);
+                           static_cast<double>(obc.b) / 255.0, librevenge::RVNG_PERCENT);
       graphicsProps.insert("draw:green",
-                           static_cast<double>(obc.g) / 255.0, WPX_PERCENT);
+                           static_cast<double>(obc.g) / 255.0, librevenge::RVNG_PERCENT);
     }
-    if (!!info.m_pictureBrightness)
-      graphicsProps.insert("draw:luminance", static_cast<double>(info.m_pictureBrightness.get() + 32768.0) / 65536.0, WPX_PERCENT);
+    if (bool(info.m_pictureBrightness))
+      graphicsProps.insert("draw:luminance", static_cast<double>(info.m_pictureBrightness.get() + 32768.0) / 65536.0, librevenge::RVNG_PERCENT);
     bool shadowPropsInserted = false;
-    if (!!info.m_shadow)
+    if (bool(info.m_shadow))
     {
       const Shadow &s = info.m_shadow.get();
       if (!needsEmulation(s))
@@ -496,24 +695,24 @@ boost::function<void(void)> libmspub::MSPUBCollector::paintShape(const ShapeInfo
         graphicsProps.insert("draw:shadow-offset-x", static_cast<double>(s.m_offsetXInEmu) / EMUS_IN_INCH);
         graphicsProps.insert("draw:shadow-offset-y", static_cast<double>(s.m_offsetYInEmu) / EMUS_IN_INCH);
         graphicsProps.insert("draw:shadow-color", getColorString(s.m_color.getFinalColor(m_paletteColors)));
-        graphicsProps.insert("draw:shadow-opacity", s.m_opacity, WPX_PERCENT);
+        graphicsProps.insert("draw:shadow-opacity", s.m_opacity, librevenge::RVNG_PERCENT);
       }
       // TODO: Emulate shadows that don't conform
       // to LibreOffice's range of possible shadows.
     }
-    m_painter->setStyle(graphicsProps, graphicsPropsVector);
+    m_painter->setStyle(graphicsProps);
 
     writeCustomShape(type, graphicsProps, m_painter, x, y, height, width,
                      true, foldedTransform,
-                     std::vector<Line>(), boost::bind(&libmspub::MSPUBCollector::getCalculationValue, this, info, _1, false, adjustValues), m_paletteColors, info.getCustomShape());
-    if (!!info.m_pictureRecolor)
+                     std::vector<Line>(), boost::bind(&MSPUBCollector::getCalculationValue, this, info, _1, false, adjustValues), m_paletteColors, info.getCustomShape());
+    if (bool(info.m_pictureRecolor))
     {
       graphicsProps.remove("draw:color-mode");
       graphicsProps.remove("draw:red");
       graphicsProps.remove("draw:blue");
       graphicsProps.remove("draw:green");
     }
-    if (!!info.m_pictureBrightness)
+    if (bool(info.m_pictureBrightness))
       graphicsProps.remove("draw:luminance");
     if (shadowPropsInserted)
     {
@@ -564,30 +763,30 @@ boost::function<void(void)> libmspub::MSPUBCollector::paintShape(const ShapeInfo
           const BorderArtInfo &ba = m_borderImages[maybeBorderImg.get()];
           if (!ba.m_offsets.empty())
           {
-            WPXPropertyList baProps;
+            librevenge::RVNGPropertyList baProps;
             baProps.insert("draw:stroke", "none");
             baProps.insert("draw:fill", "solid");
             baProps.insert("draw:fill-color", "#ffffff");
-            m_painter->setStyle(baProps, WPXPropertyListVector());
-            WPXPropertyList topRectProps;
+            m_painter->setStyle(baProps);
+            librevenge::RVNGPropertyList topRectProps;
             topRectProps.insert("svg:x", x);
             topRectProps.insert("svg:y", y);
             topRectProps.insert("svg:height", borderImgWidth);
             topRectProps.insert("svg:width", width);
             m_painter->drawRectangle(topRectProps);
-            WPXPropertyList rightRectProps;
+            librevenge::RVNGPropertyList rightRectProps;
             rightRectProps.insert("svg:x", x + width - borderImgWidth);
             rightRectProps.insert("svg:y", y);
             rightRectProps.insert("svg:height", height);
             rightRectProps.insert("svg:width", borderImgWidth);
             m_painter->drawRectangle(rightRectProps);
-            WPXPropertyList botRectProps;
+            librevenge::RVNGPropertyList botRectProps;
             botRectProps.insert("svg:x", x);
             botRectProps.insert("svg:y", y + height - borderImgWidth);
             botRectProps.insert("svg:height", borderImgWidth);
             botRectProps.insert("svg:width", width);
             m_painter->drawRectangle(botRectProps);
-            WPXPropertyList leftRectProps;
+            librevenge::RVNGPropertyList leftRectProps;
             leftRectProps.insert("svg:x", x);
             leftRectProps.insert("svg:y", y);
             leftRectProps.insert("svg:height", height);
@@ -595,7 +794,7 @@ boost::function<void(void)> libmspub::MSPUBCollector::paintShape(const ShapeInfo
             m_painter->drawRectangle(leftRectProps);
             std::vector<unsigned>::const_iterator iOffset = ba.m_offsets.begin();
             boost::optional<Color> oneBitColor;
-            if (!!info.m_lineBackColor)
+            if (bool(info.m_lineBackColor))
             {
               oneBitColor = info.m_lineBackColor.get().getFinalColor(m_paletteColors);
             }
@@ -606,7 +805,7 @@ boost::function<void(void)> libmspub::MSPUBCollector::paintShape(const ShapeInfo
             {
               const BorderImgInfo &bi = ba.m_images[iOrdOff];
               writeImage(x, y, borderImgWidth, borderImgWidth,
-                        bi.m_type, bi.m_imgBlob, oneBitColor);
+                         bi.m_type, bi.m_imgBlob, oneBitColor);
             }
             if (iOffset + 1 != ba.m_offsets.end())
             {
@@ -614,7 +813,7 @@ boost::function<void(void)> libmspub::MSPUBCollector::paintShape(const ShapeInfo
             }
             // top
             iOrdOff = find(ba.m_offsetsOrdered.begin(),
-                          ba.m_offsetsOrdered.end(), *iOffset) - ba.m_offsetsOrdered.begin();
+                           ba.m_offsetsOrdered.end(), *iOffset) - ba.m_offsetsOrdered.begin();
             if (iOrdOff < ba.m_images.size())
             {
               const BorderImgInfo &bi = ba.m_images[iOrdOff];
@@ -624,8 +823,8 @@ boost::function<void(void)> libmspub::MSPUBCollector::paintShape(const ShapeInfo
                               x + borderImgWidth + (iTop - 1) * stretchedImgWidth :
                               x + iTop * (borderImgWidth + borderHorizPadding);
                 writeImage(imgX, y,
-                          borderImgWidth, stretchedImgWidth,
-                          bi.m_type, bi.m_imgBlob, oneBitColor);
+                           borderImgWidth, stretchedImgWidth,
+                           bi.m_type, bi.m_imgBlob, oneBitColor);
               }
             }
             if (iOffset + 1 != ba.m_offsets.end())
@@ -634,13 +833,13 @@ boost::function<void(void)> libmspub::MSPUBCollector::paintShape(const ShapeInfo
             }
             // top right
             iOrdOff = find(ba.m_offsetsOrdered.begin(),
-                          ba.m_offsetsOrdered.end(), *iOffset) - ba.m_offsetsOrdered.begin();
+                           ba.m_offsetsOrdered.end(), *iOffset) - ba.m_offsetsOrdered.begin();
             if (iOrdOff < ba.m_images.size())
             {
               const BorderImgInfo &bi = ba.m_images[iOrdOff];
               writeImage(x + width - borderImgWidth, y,
-                        borderImgWidth, borderImgWidth,
-                        bi.m_type, bi.m_imgBlob, oneBitColor);
+                         borderImgWidth, borderImgWidth,
+                         bi.m_type, bi.m_imgBlob, oneBitColor);
             }
             if (iOffset + 1 != ba.m_offsets.end())
             {
@@ -648,7 +847,7 @@ boost::function<void(void)> libmspub::MSPUBCollector::paintShape(const ShapeInfo
             }
             // right
             iOrdOff = find(ba.m_offsetsOrdered.begin(),
-                          ba.m_offsetsOrdered.end(), *iOffset) - ba.m_offsetsOrdered.begin();
+                           ba.m_offsetsOrdered.end(), *iOffset) - ba.m_offsetsOrdered.begin();
             if (iOrdOff < ba.m_images.size())
             {
               const BorderImgInfo &bi = ba.m_images[iOrdOff];
@@ -658,9 +857,9 @@ boost::function<void(void)> libmspub::MSPUBCollector::paintShape(const ShapeInfo
                               y + borderImgWidth + (iRight - 1) * stretchedImgHeight :
                               y + iRight * (borderImgWidth + borderVertPadding);
                 writeImage(x + width - borderImgWidth,
-                          imgY,
-                          stretchedImgHeight, borderImgWidth,
-                          bi.m_type, bi.m_imgBlob, oneBitColor);
+                           imgY,
+                           stretchedImgHeight, borderImgWidth,
+                           bi.m_type, bi.m_imgBlob, oneBitColor);
               }
             }
             if (iOffset + 1 != ba.m_offsets.end())
@@ -669,14 +868,14 @@ boost::function<void(void)> libmspub::MSPUBCollector::paintShape(const ShapeInfo
             }
             // bottom right
             iOrdOff = find(ba.m_offsetsOrdered.begin(),
-                          ba.m_offsetsOrdered.end(), *iOffset) - ba.m_offsetsOrdered.begin();
+                           ba.m_offsetsOrdered.end(), *iOffset) - ba.m_offsetsOrdered.begin();
             if (iOrdOff < ba.m_images.size())
             {
               const BorderImgInfo &bi = ba.m_images[iOrdOff];
               writeImage(x + width - borderImgWidth,
-                        y + height - borderImgWidth,
-                        borderImgWidth, borderImgWidth,
-                        bi.m_type, bi.m_imgBlob, oneBitColor);
+                         y + height - borderImgWidth,
+                         borderImgWidth, borderImgWidth,
+                         bi.m_type, bi.m_imgBlob, oneBitColor);
             }
             if (iOffset + 1 != ba.m_offsets.end())
             {
@@ -684,7 +883,7 @@ boost::function<void(void)> libmspub::MSPUBCollector::paintShape(const ShapeInfo
             }
             // bottom
             iOrdOff = find(ba.m_offsetsOrdered.begin(),
-                          ba.m_offsetsOrdered.end(), *iOffset) - ba.m_offsetsOrdered.begin();
+                           ba.m_offsetsOrdered.end(), *iOffset) - ba.m_offsetsOrdered.begin();
             if (iOrdOff < ba.m_images.size())
             {
               const BorderImgInfo &bi = ba.m_images[iOrdOff];
@@ -705,13 +904,13 @@ boost::function<void(void)> libmspub::MSPUBCollector::paintShape(const ShapeInfo
             }
             // bottom left
             iOrdOff = find(ba.m_offsetsOrdered.begin(),
-                          ba.m_offsetsOrdered.end(), *iOffset) - ba.m_offsetsOrdered.begin();
+                           ba.m_offsetsOrdered.end(), *iOffset) - ba.m_offsetsOrdered.begin();
             if (iOrdOff < ba.m_images.size())
             {
               const BorderImgInfo &bi = ba.m_images[iOrdOff];
               writeImage(x, y + height - borderImgWidth,
-                        borderImgWidth, borderImgWidth,
-                        bi.m_type, bi.m_imgBlob, oneBitColor);
+                         borderImgWidth, borderImgWidth,
+                         bi.m_type, bi.m_imgBlob, oneBitColor);
             }
             if (iOffset + 1 != ba.m_offsets.end())
             {
@@ -719,7 +918,7 @@ boost::function<void(void)> libmspub::MSPUBCollector::paintShape(const ShapeInfo
             }
             // left
             iOrdOff = find(ba.m_offsetsOrdered.begin(),
-                          ba.m_offsetsOrdered.end(), *iOffset) - ba.m_offsetsOrdered.begin();
+                           ba.m_offsetsOrdered.end(), *iOffset) - ba.m_offsetsOrdered.begin();
             if (iOrdOff < ba.m_images.size())
             {
               const BorderImgInfo &bi = ba.m_images[iOrdOff];
@@ -730,7 +929,7 @@ boost::function<void(void)> libmspub::MSPUBCollector::paintShape(const ShapeInfo
                               y + height - borderImgWidth -
                               iLeft * (borderImgWidth + borderVertPadding);
                 writeImage(x, imgY, stretchedImgHeight, borderImgWidth,
-                          bi.m_type, bi.m_imgBlob, oneBitColor);
+                           bi.m_type, bi.m_imgBlob, oneBitColor);
               }
             }
           }
@@ -747,11 +946,11 @@ boost::function<void(void)> libmspub::MSPUBCollector::paintShape(const ShapeInfo
       height = strokeCoord.getHeightIn();
       width = strokeCoord.getWidthIn();
       graphicsProps.insert("draw:fill", "none");
-      if (!!info.m_dash && !info.m_dash.get().m_dots.empty())
+      if (bool(info.m_dash) && !info.m_dash.get().m_dots.empty())
       {
         const Dash &dash = info.m_dash.get();
         graphicsProps.insert("draw:stroke", "dash");
-        graphicsProps.insert("draw:distance", dash.m_distance, WPX_INCH);
+        graphicsProps.insert("draw:distance", dash.m_distance, librevenge::RVNG_INCH);
         switch (dash.m_dotStyle)
         {
         case ROUND_DOT:
@@ -765,14 +964,14 @@ boost::function<void(void)> libmspub::MSPUBCollector::paintShape(const ShapeInfo
         }
         for (unsigned i = 0; i < dash.m_dots.size(); ++i)
         {
-          WPXString dots;
+          librevenge::RVNGString dots;
           dots.sprintf("draw:dots%d", i + 1);
           graphicsProps.insert(dots.cstr(), static_cast<int>(dash.m_dots[i].m_count));
-          if (!!dash.m_dots[i].m_length)
+          if (bool(dash.m_dots[i].m_length))
           {
-            WPXString length;
+            librevenge::RVNGString length;
             length.sprintf("draw:dots%d-length", i + 1);
-            graphicsProps.insert(length.cstr(), dash.m_dots[i].m_length.get(), WPX_INCH);
+            graphicsProps.insert(length.cstr(), dash.m_dots[i].m_length.get(), librevenge::RVNG_INCH);
           }
         }
       }
@@ -780,11 +979,11 @@ boost::function<void(void)> libmspub::MSPUBCollector::paintShape(const ShapeInfo
       {
         graphicsProps.insert("draw:stroke", "solid");
       }
-      m_painter->setStyle(graphicsProps, graphicsPropsVector);
+      m_painter->setStyle(graphicsProps);
       writeCustomShape(type, graphicsProps, m_painter, x, y, height, width,
                        false, foldedTransform, lines,
                        boost::bind(
-                         &libmspub::MSPUBCollector::getCalculationValue, this, info, _1, false, adjustValues
+                         &MSPUBCollector::getCalculationValue, this, info, _1, false, adjustValues
                        ),
                        m_paletteColors, info.getCustomShape());
     }
@@ -795,65 +994,135 @@ boost::function<void(void)> libmspub::MSPUBCollector::paintShape(const ShapeInfo
     graphicsProps.insert("draw:fill", "none");
     Coordinate textCoord = isShapeTypeRectangle(type) ?
                            getFudgedCoordinates(coord, lines, false, borderPosition) : coord;
-    m_painter->setStyle(graphicsProps, graphicsPropsVector);
-    WPXPropertyList props;
+    m_painter->setStyle(graphicsProps);
+    librevenge::RVNGPropertyList props;
     setRectCoordProps(textCoord, &props);
     double textRotation = thisTransform.getRotation();
     if (textRotation != 0)
     {
-      props.insert("libwpg:rotate", textRotation * 180 / M_PI);
+      props.insert("librevenge:rotate", textRotation * 180 / M_PI);
     }
-    Margins margins = info.m_margins.get_value_or(Margins());
-    props.insert("fo:padding-left", (double)margins.m_left / EMUS_IN_INCH);
-    props.insert("fo:padding-top", (double)margins.m_top / EMUS_IN_INCH);
-    props.insert("fo:padding-right", (double)margins.m_right / EMUS_IN_INCH);
-    props.insert("fo:padding-bottom", (double)margins.m_bottom / EMUS_IN_INCH);
-    if(!!info.m_verticalAlign)
+
+    if (isTable)
     {
-      switch (info.m_verticalAlign.get())
+      m_painter->startTableObject(props);
+
+      const std::map<unsigned, std::vector<unsigned> >::const_iterator it = m_tableCellTextEndsByTextId.find(get(info.m_textId));
+      const std::vector<unsigned> &tableCellTextEnds = (it != m_tableCellTextEndsByTextId.end()) ? it->second : std::vector<unsigned>();
+
+      TableLayout tableLayout(boost::extents[get(info.m_tableInfo).m_numRows][get(info.m_tableInfo).m_numColumns]);
+      createTableLayout(get(info.m_tableInfo).m_cells, tableLayout);
+
+      ParagraphToCellMap_t paraToCellMap;
+      ParagraphTexts_t paraTexts;
+      mapTableTextToCells(text, tableCellTextEnds, getCalculatedEncoding(), paraToCellMap, paraTexts);
+
+      for (unsigned row = 0; row != tableLayout.shape()[0]; ++row)
       {
-      default:
-      case TOP:
-        props.insert("draw:textarea-vertical-align", "top");
-        break;
-      case MIDDLE:
-        props.insert("draw:textarea-vertical-align", "middle");
-        break;
-      case BOTTOM:
-        props.insert("draw:textarea-vertical-align", "bottom");
-        break;
+        m_painter->openTableRow(librevenge::RVNGPropertyList());
+
+        for (unsigned col = 0; col != tableLayout.shape()[1]; ++col)
+        {
+          librevenge::RVNGPropertyList cellProps;
+          cellProps.insert("librevenge:column", int(col));
+          cellProps.insert("librevenge:row", int(row));
+
+          if (isCovered(tableLayout[row][col]))
+          {
+            m_painter->insertCoveredTableCell(cellProps);
+          }
+          else
+          {
+            if (tableLayout[row][col].m_colSpan > 1)
+              cellProps.insert("table:number-columns-spanned", int(tableLayout[row][col].m_colSpan));
+            if (tableLayout[row][col].m_rowSpan > 1)
+              cellProps.insert("table:number-rows-spanned", int(tableLayout[row][col].m_rowSpan));
+
+            m_painter->openTableCell(cellProps);
+
+            if (tableLayout[row][col].m_cell < paraToCellMap.size())
+            {
+              const std::pair<unsigned, unsigned> &cellParas = paraToCellMap[tableLayout[row][col].m_cell];
+              for (unsigned para = cellParas.first; para <= cellParas.second; ++para)
+              {
+                librevenge::RVNGPropertyList paraProps = getParaStyleProps(text[para].style, text[para].style.m_defaultCharStyleIndex);
+                m_painter->openParagraph(paraProps);
+
+                for (unsigned i_spans = 0; i_spans < paraTexts[para].size(); ++i_spans)
+                {
+                  librevenge::RVNGPropertyList charProps = getCharStyleProps(text[para].spans[i_spans].style, text[para].style.m_defaultCharStyleIndex);
+                  m_painter->openSpan(charProps);
+                  separateSpacesAndInsertText(m_painter, paraTexts[para][i_spans]);
+                  m_painter->closeSpan();
+                }
+
+                m_painter->closeParagraph();
+              }
+            }
+
+            m_painter->closeTableCell();
+          }
+        }
+
+        m_painter->closeTableRow();
       }
+
+      m_painter->endTableObject();
     }
-    if (info.m_numColumns)
+    else // a text object
     {
-      unsigned ncols = info.m_numColumns.get_value_or(0);
-      if (ncols > 0)
-        props.insert("fo:column-count", (int)ncols);
-    }
-    if (info.m_columnSpacing)
-    {
-      unsigned ngap = info.m_columnSpacing;
-      if (ngap > 0)
-        props.insert("fo:column-gap", (double)ngap / EMUS_IN_INCH);
-    }
-    m_painter->startTextObject(props, WPXPropertyListVector());
-    for (unsigned i_lines = 0; i_lines < text.size(); ++i_lines)
-    {
-      WPXPropertyList paraProps = getParaStyleProps(text[i_lines].style, text[i_lines].style.m_defaultCharStyleIndex);
-      m_painter->startTextLine(paraProps);
-      for (unsigned i_spans = 0; i_spans < text[i_lines].spans.size(); ++i_spans)
+      Margins margins = info.m_margins.get_value_or(Margins());
+      props.insert("fo:padding-left", (double)margins.m_left / EMUS_IN_INCH);
+      props.insert("fo:padding-top", (double)margins.m_top / EMUS_IN_INCH);
+      props.insert("fo:padding-right", (double)margins.m_right / EMUS_IN_INCH);
+      props.insert("fo:padding-bottom", (double)margins.m_bottom / EMUS_IN_INCH);
+      if (bool(info.m_verticalAlign))
       {
-        WPXString textString;
-        appendCharacters(textString, text[i_lines].spans[i_spans].chars,
-                         getCalculatedEncoding());
-        WPXPropertyList charProps = getCharStyleProps(text[i_lines].spans[i_spans].style, text[i_lines].style.m_defaultCharStyleIndex);
-        m_painter->startTextSpan(charProps);
-        m_painter->insertText(textString);
-        m_painter->endTextSpan();
+        switch (info.m_verticalAlign.get())
+        {
+        default:
+        case TOP:
+          props.insert("draw:textarea-vertical-align", "top");
+          break;
+        case MIDDLE:
+          props.insert("draw:textarea-vertical-align", "middle");
+          break;
+        case BOTTOM:
+          props.insert("draw:textarea-vertical-align", "bottom");
+          break;
+        }
       }
-      m_painter->endTextLine();
+      if (info.m_numColumns)
+      {
+        unsigned ncols = info.m_numColumns.get_value_or(0);
+        if (ncols > 0)
+          props.insert("fo:column-count", (int)ncols);
+      }
+      if (info.m_columnSpacing)
+      {
+        unsigned ngap = info.m_columnSpacing;
+        if (ngap > 0)
+          props.insert("fo:column-gap", (double)ngap / EMUS_IN_INCH);
+      }
+      m_painter->startTextObject(props);
+      for (unsigned i_lines = 0; i_lines < text.size(); ++i_lines)
+      {
+        librevenge::RVNGPropertyList paraProps = getParaStyleProps(text[i_lines].style, text[i_lines].style.m_defaultCharStyleIndex);
+        m_painter->openParagraph(paraProps);
+        for (unsigned i_spans = 0; i_spans < text[i_lines].spans.size(); ++i_spans)
+        {
+          librevenge::RVNGString textString;
+          appendCharacters(textString, text[i_lines].spans[i_spans].chars,
+                           getCalculatedEncoding());
+          librevenge::RVNGPropertyList charProps = getCharStyleProps(text[i_lines].spans[i_spans].style, text[i_lines].style.m_defaultCharStyleIndex);
+          m_painter->openSpan(charProps);
+          separateSpacesAndInsertText(m_painter, textString);
+          m_painter->closeSpan();
+        }
+        m_painter->closeParagraph();
+      }
+      m_painter->endTextObject();
     }
-    m_painter->endTextObject();
   }
   if (makeLayer)
   {
@@ -862,9 +1131,9 @@ boost::function<void(void)> libmspub::MSPUBCollector::paintShape(const ShapeInfo
   return &no_op;
 }
 
-const char *libmspub::MSPUBCollector::getCalculatedEncoding() const
+const char *MSPUBCollector::getCalculatedEncoding() const
 {
-  if (!!m_calculatedEncoding)
+  if (bool(m_calculatedEncoding))
   {
     return m_calculatedEncoding.get();
   }
@@ -924,34 +1193,35 @@ csd_fail:
   return "windows-1252"; // Pretty likely to give garbage text, but it's the best we can do.
 }
 
-void libmspub::MSPUBCollector::setShapeLineBackColor(unsigned shapeSeqNum,
-    ColorReference backColor)
+void MSPUBCollector::setShapeLineBackColor(unsigned shapeSeqNum,
+                                           ColorReference backColor)
 {
   m_shapeInfosBySeqNum[shapeSeqNum].m_lineBackColor = backColor;
 }
 
-void libmspub::MSPUBCollector::writeImage(double x, double y,
-    double height, double width, ImgType type, const WPXBinaryData &blob,
-    boost::optional<Color> oneBitColor) const
+void MSPUBCollector::writeImage(double x, double y,
+                                double height, double width, ImgType type, const librevenge::RVNGBinaryData &blob,
+                                boost::optional<Color> oneBitColor) const
 {
-  WPXPropertyList props;
-  if (!!oneBitColor)
+  librevenge::RVNGPropertyList props;
+  if (bool(oneBitColor))
   {
     Color obc = oneBitColor.get();
     props.insert("draw:color-mode", "greyscale");
-    props.insert("draw:red", static_cast<double>(obc.r) / 255.0, WPX_PERCENT);
-    props.insert("draw:blue", static_cast<double>(obc.b) / 255.0, WPX_PERCENT);
-    props.insert("draw:green", static_cast<double>(obc.g) / 255.0, WPX_PERCENT);
+    props.insert("draw:red", static_cast<double>(obc.r) / 255.0, librevenge::RVNG_PERCENT);
+    props.insert("draw:blue", static_cast<double>(obc.b) / 255.0, librevenge::RVNG_PERCENT);
+    props.insert("draw:green", static_cast<double>(obc.g) / 255.0, librevenge::RVNG_PERCENT);
   }
   props.insert("svg:x", x);
   props.insert("svg:y", y);
   props.insert("svg:width", width);
   props.insert("svg:height", height);
-  props.insert("libwpg:mime-type", mimeByImgType(type));
-  m_painter->drawGraphicObject(props, blob);
+  props.insert("librevenge:mime-type", mimeByImgType(type));
+  props.insert("office:binary-data", blob);
+  m_painter->drawGraphicObject(props);
 }
 
-double libmspub::MSPUBCollector::getSpecialValue(const ShapeInfo &info, const CustomShape &shape, int arg, const std::vector<int> &adjustValues) const
+double MSPUBCollector::getSpecialValue(const ShapeInfo &info, const CustomShape &shape, int arg, const std::vector<int> &adjustValues) const
 {
   if (PROP_ADJUST_VAL_FIRST <= arg && PROP_ADJUST_VAL_LAST >= arg)
   {
@@ -991,7 +1261,7 @@ double libmspub::MSPUBCollector::getSpecialValue(const ShapeInfo &info, const Cu
   return 0;
 }
 
-double libmspub::MSPUBCollector::getCalculationValue(const ShapeInfo &info, unsigned index, bool recursiveEntry, const std::vector<int> &adjustValues) const
+double MSPUBCollector::getCalculationValue(const ShapeInfo &info, unsigned index, bool recursiveEntry, const std::vector<int> &adjustValues) const
 {
   boost::shared_ptr<const CustomShape> p_shape = info.getCustomShape();
   if (! p_shape)
@@ -1047,9 +1317,9 @@ double libmspub::MSPUBCollector::getCalculationValue(const ShapeInfo &info, unsi
   case 8:
     return atan2(valTwo, valOne) / (M_PI / 180);
   case 9:
-    return valOne * sin(valTwo * (M_PI / 180) );
+    return valOne * sin(valTwo * (M_PI / 180));
   case 10:
-    return valOne * cos(valTwo * (M_PI / 180) );
+    return valOne * cos(valTwo * (M_PI / 180));
   case 11:
     return valOne * cos(atan2(valThree, valTwo));
   case 12:
@@ -1071,44 +1341,44 @@ double libmspub::MSPUBCollector::getCalculationValue(const ShapeInfo &info, unsi
   }
 }
 
-libmspub::MSPUBCollector::~MSPUBCollector()
+MSPUBCollector::~MSPUBCollector()
 {
 }
 
-void libmspub::MSPUBCollector::setShapeRotation(unsigned seqNum, double rotation)
+void MSPUBCollector::setShapeRotation(unsigned seqNum, double rotation)
 {
   m_shapeInfosBySeqNum[seqNum].m_rotation = rotation;
   m_shapeInfosBySeqNum[seqNum].m_innerRotation = (int)rotation;
 }
 
-void libmspub::MSPUBCollector::setShapeFlip(unsigned seqNum, bool flipVertical, bool flipHorizontal)
+void MSPUBCollector::setShapeFlip(unsigned seqNum, bool flipVertical, bool flipHorizontal)
 {
   m_shapeInfosBySeqNum[seqNum].m_flips = std::pair<bool, bool>(flipVertical, flipHorizontal);
 }
 
-void libmspub::MSPUBCollector::setShapeType(unsigned seqNum, ShapeType type)
+void MSPUBCollector::setShapeType(unsigned seqNum, ShapeType type)
 {
   m_shapeInfosBySeqNum[seqNum].m_type = type;
 }
 
-void libmspub::MSPUBCollector::setAdjustValue(unsigned seqNum, unsigned index, int adjust)
+void MSPUBCollector::setAdjustValue(unsigned seqNum, unsigned index, int adjust)
 {
   m_shapeInfosBySeqNum[seqNum].m_adjustValuesByIndex[index] = adjust;
 }
 
-void libmspub::MSPUBCollector::addDefaultCharacterStyle(const CharacterStyle &st)
+void MSPUBCollector::addDefaultCharacterStyle(const CharacterStyle &st)
 {
   m_defaultCharStyles.push_back(st);
 }
 
-void libmspub::MSPUBCollector::addDefaultParagraphStyle(const ParagraphStyle &st)
+void MSPUBCollector::addDefaultParagraphStyle(const ParagraphStyle &st)
 {
   m_defaultParaStyles.push_back(st);
 }
 
-bool libmspub::MSPUBCollector::addPage(unsigned seqNum)
+bool MSPUBCollector::addPage(unsigned seqNum)
 {
-  if (! (m_widthSet && m_heightSet) )
+  if (!(m_widthSet && m_heightSet))
   {
     return false;
   }
@@ -1117,23 +1387,23 @@ bool libmspub::MSPUBCollector::addPage(unsigned seqNum)
   return true;
 }
 
-void libmspub::MSPUBCollector::addTextShape(unsigned stringId, unsigned seqNum)
+void MSPUBCollector::addTextShape(unsigned stringId, unsigned seqNum)
 {
   m_shapeInfosBySeqNum[seqNum].m_textId = stringId;
 }
 
-void libmspub::MSPUBCollector::setShapeImgIndex(unsigned seqNum, unsigned index)
+void MSPUBCollector::setShapeImgIndex(unsigned seqNum, unsigned index)
 {
   MSPUB_DEBUG_MSG(("Setting image index of shape with seqnum 0x%x to 0x%x\n", seqNum, index));
   m_shapeInfosBySeqNum[seqNum].m_imgIndex = index;
 }
 
-void libmspub::MSPUBCollector::setShapeDash(unsigned seqNum, const Dash &dash)
+void MSPUBCollector::setShapeDash(unsigned seqNum, const Dash &dash)
 {
   m_shapeInfosBySeqNum[seqNum].m_dash = dash;
 }
 
-void libmspub::MSPUBCollector::setShapeFill(unsigned seqNum, boost::shared_ptr<Fill> fill, bool skipIfNotBg)
+void MSPUBCollector::setShapeFill(unsigned seqNum, boost::shared_ptr<Fill> fill, bool skipIfNotBg)
 {
   m_shapeInfosBySeqNum[seqNum].m_fill = fill;
   if (skipIfNotBg)
@@ -1142,21 +1412,21 @@ void libmspub::MSPUBCollector::setShapeFill(unsigned seqNum, boost::shared_ptr<F
   }
 }
 
-void libmspub::MSPUBCollector::setShapeCoordinatesInEmu(unsigned seqNum, int xs, int ys, int xe, int ye)
+void MSPUBCollector::setShapeCoordinatesInEmu(unsigned seqNum, int xs, int ys, int xe, int ye)
 {
   m_shapeInfosBySeqNum[seqNum].m_coordinates = Coordinate(xs, ys, xe, ye);
 }
 
-void libmspub::MSPUBCollector::addFont(std::vector<unsigned char> name)
+void MSPUBCollector::addFont(std::vector<unsigned char> name)
 {
   m_fonts.push_back(name);
 }
 
-WPXPropertyList libmspub::MSPUBCollector::getParaStyleProps(const ParagraphStyle &style, boost::optional<unsigned> defaultParaStyleIndex) const
+librevenge::RVNGPropertyList MSPUBCollector::getParaStyleProps(const ParagraphStyle &style, boost::optional<unsigned> defaultParaStyleIndex) const
 {
   ParagraphStyle _nothing;
-  const ParagraphStyle &defaultStyle = !!defaultParaStyleIndex && defaultParaStyleIndex.get() < m_defaultParaStyles.size() ? m_defaultParaStyles[defaultParaStyleIndex.get()] : _nothing;
-  WPXPropertyList ret;
+  const ParagraphStyle &defaultStyle = bool(defaultParaStyleIndex) && defaultParaStyleIndex.get() < m_defaultParaStyles.size() ? m_defaultParaStyles[defaultParaStyleIndex.get()] : _nothing;
+  librevenge::RVNGPropertyList ret;
   Alignment align = style.m_align.get_value_or(
                       defaultStyle.m_align.get_value_or(LEFT));
   switch (align)
@@ -1183,11 +1453,11 @@ WPXPropertyList libmspub::MSPUBCollector::getParaStyleProps(const ParagraphStyle
   {
     if (lineSpacingType == LINE_SPACING_SP)
     {
-      ret.insert("fo:line-height", lineSpacing, WPX_PERCENT);
+      ret.insert("fo:line-height", lineSpacing, librevenge::RVNG_PERCENT);
     }
     else if (lineSpacingType == LINE_SPACING_PT)
     {
-      ret.insert("fo:line-height", lineSpacing, WPX_POINT);
+      ret.insert("fo:line-height", lineSpacing, librevenge::RVNG_POINT);
     }
   }
   unsigned spaceAfterEmu = style.m_spaceAfterEmu.get_value_or(
@@ -1235,7 +1505,7 @@ WPXPropertyList libmspub::MSPUBCollector::getParaStyleProps(const ParagraphStyle
   return ret;
 }
 
-WPXPropertyList libmspub::MSPUBCollector::getCharStyleProps(const CharacterStyle &style, boost::optional<unsigned> defaultCharStyleIndex) const
+librevenge::RVNGPropertyList MSPUBCollector::getCharStyleProps(const CharacterStyle &style, boost::optional<unsigned> defaultCharStyleIndex) const
 {
   CharacterStyle _nothing = CharacterStyle(false, false, false);
   if (!defaultCharStyleIndex)
@@ -1243,7 +1513,7 @@ WPXPropertyList libmspub::MSPUBCollector::getCharStyleProps(const CharacterStyle
     defaultCharStyleIndex = 0;
   }
   const CharacterStyle &defaultCharStyle = defaultCharStyleIndex.get() < m_defaultCharStyles.size() ? m_defaultCharStyles[defaultCharStyleIndex.get()] : _nothing;
-  WPXPropertyList ret;
+  librevenge::RVNGPropertyList ret;
   if (style.italic ^ defaultCharStyle.italic)
   {
     ret.insert("fo:font-style", "italic");
@@ -1256,11 +1526,11 @@ WPXPropertyList libmspub::MSPUBCollector::getCharStyleProps(const CharacterStyle
   {
     ret.insert("style:text-underline-type", "single");
   }
-  if (!!style.textSizeInPt)
+  if (bool(style.textSizeInPt))
   {
     ret.insert("fo:font-size", style.textSizeInPt.get() / POINTS_IN_INCH);
   }
-  else if (!!defaultCharStyle.textSizeInPt)
+  else if (bool(defaultCharStyle.textSizeInPt))
   {
     ret.insert("fo:font-size", defaultCharStyle.textSizeInPt.get()
                / POINTS_IN_INCH);
@@ -1277,25 +1547,25 @@ WPXPropertyList libmspub::MSPUBCollector::getCharStyleProps(const CharacterStyle
   {
     ret.insert("fo:color", getColorString(Color(0, 0, 0)));  // default color is black
   }
-  if (!!style.fontIndex &&
+  if (bool(style.fontIndex) &&
       style.fontIndex.get() < m_fonts.size())
   {
-    WPXString str;
+    librevenge::RVNGString str;
     appendCharacters(str, m_fonts[style.fontIndex.get()],
                      getCalculatedEncoding());
     ret.insert("style:font-name", str);
   }
-  else if (!!defaultCharStyle.fontIndex &&
+  else if (bool(defaultCharStyle.fontIndex) &&
            defaultCharStyle.fontIndex.get() < m_fonts.size())
   {
-    WPXString str;
+    librevenge::RVNGString str;
     appendCharacters(str, m_fonts[defaultCharStyle.fontIndex.get()],
                      getCalculatedEncoding());
     ret.insert("style:font-name", str);
   }
   else if (!m_fonts.empty())
   {
-    WPXString str;
+    librevenge::RVNGString str;
     appendCharacters(str, m_fonts[0],
                      getCalculatedEncoding());
     ret.insert("style:font-name", str);
@@ -1314,15 +1584,15 @@ WPXPropertyList libmspub::MSPUBCollector::getCharStyleProps(const CharacterStyle
   return ret;
 }
 
-WPXString libmspub::MSPUBCollector::getColorString(const Color &color)
+librevenge::RVNGString MSPUBCollector::getColorString(const Color &color)
 {
-  WPXString ret;
+  librevenge::RVNGString ret;
   ret.sprintf("#%.2x%.2x%.2x",(unsigned char)color.r, (unsigned char)color.g, (unsigned char)color.b);
   MSPUB_DEBUG_MSG(("String for r: 0x%x, g: 0x%x, b: 0x%x is %s\n", color.r, color.g, color.b, ret.cstr()));
   return ret;
 }
 
-void libmspub::MSPUBCollector::addBlackToPaletteIfNecessary()
+void MSPUBCollector::addBlackToPaletteIfNecessary()
 {
   if (m_paletteColors.size() < 8)
   {
@@ -1330,12 +1600,12 @@ void libmspub::MSPUBCollector::addBlackToPaletteIfNecessary()
   }
 }
 
-void libmspub::MSPUBCollector::assignShapesToPages()
+void MSPUBCollector::assignShapesToPages()
 {
   for (unsigned i = 0; i < m_topLevelShapes.size(); ++i)
   {
     unsigned *ptr_pageSeqNum = getIfExists(m_pageSeqNumsByShapeSeqNum, m_topLevelShapes[i].getSeqNum());
-    m_topLevelShapes[i].setup(boost::bind(&libmspub::MSPUBCollector::setupShapeStructures, this, _1));
+    m_topLevelShapes[i].setup(boost::bind(&MSPUBCollector::setupShapeStructures, this, _1));
     if (ptr_pageSeqNum)
     {
       PageInfo *ptr_page = getIfExists(m_pagesBySeqNum, *ptr_pageSeqNum);
@@ -1347,7 +1617,7 @@ void libmspub::MSPUBCollector::assignShapesToPages()
   }
 }
 
-boost::optional<unsigned> libmspub::MSPUBCollector::getMasterPageSeqNum(unsigned pageSeqNum) const
+boost::optional<unsigned> MSPUBCollector::getMasterPageSeqNum(unsigned pageSeqNum) const
 {
   boost::optional<unsigned> toReturn;
   const unsigned *ptr_masterSeqNum = getIfExists_const(m_masterPagesByPageSeqNum, pageSeqNum);
@@ -1358,10 +1628,10 @@ boost::optional<unsigned> libmspub::MSPUBCollector::getMasterPageSeqNum(unsigned
   return toReturn;
 }
 
-void libmspub::MSPUBCollector::writePage(unsigned pageSeqNum) const
+void MSPUBCollector::writePage(unsigned pageSeqNum) const
 {
   const PageInfo &pageInfo = m_pagesBySeqNum.find(pageSeqNum)->second;
-  WPXPropertyList pageProps;
+  librevenge::RVNGPropertyList pageProps;
   if (m_widthSet)
   {
     pageProps.insert("svg:width", m_width);
@@ -1373,9 +1643,9 @@ void libmspub::MSPUBCollector::writePage(unsigned pageSeqNum) const
   const std::vector<ShapeGroupElement *> &shapeGroupsOrdered = pageInfo.m_shapeGroupsOrdered;
   if (!shapeGroupsOrdered.empty())
   {
-    m_painter->startGraphics(pageProps);
+    m_painter->startPage(pageProps);
     boost::optional<unsigned> masterSeqNum = getMasterPageSeqNum(pageSeqNum);
-    bool hasMaster = !!masterSeqNum;
+    bool hasMaster = bool(masterSeqNum);
     if (hasMaster)
     {
       writePageBackground(masterSeqNum.get());
@@ -1386,22 +1656,22 @@ void libmspub::MSPUBCollector::writePage(unsigned pageSeqNum) const
       writePageShapes(masterSeqNum.get());
     }
     writePageShapes(pageSeqNum);
-    m_painter->endGraphics();
+    m_painter->endPage();
   }
 }
 
-void libmspub::MSPUBCollector::writePageShapes(unsigned pageSeqNum) const
+void MSPUBCollector::writePageShapes(unsigned pageSeqNum) const
 {
   const PageInfo &pageInfo = m_pagesBySeqNum.find(pageSeqNum)->second;
   const std::vector<ShapeGroupElement *> &shapeGroupsOrdered = pageInfo.m_shapeGroupsOrdered;
   for (unsigned i = 0; i < shapeGroupsOrdered.size(); ++i)
   {
     ShapeGroupElement *shapeGroup = shapeGroupsOrdered[i];
-    shapeGroup->visit(boost::bind(&libmspub::MSPUBCollector::paintShape, this, _1, _2, _3, _4, _5));
+    shapeGroup->visit(boost::bind(&MSPUBCollector::paintShape, this, _1, _2, _3, _4, _5));
   }
 }
 
-void libmspub::MSPUBCollector::writePageBackground(unsigned pageSeqNum) const
+void MSPUBCollector::writePageBackground(unsigned pageSeqNum) const
 {
   const unsigned *ptr_fillSeqNum = getIfExists_const(m_bgShapeSeqNumsByPageSeqNum, pageSeqNum);
   if (ptr_fillSeqNum)
@@ -1425,15 +1695,27 @@ void libmspub::MSPUBCollector::writePageBackground(unsigned pageSeqNum) const
   }
 }
 
-bool libmspub::MSPUBCollector::pageIsMaster(unsigned pageSeqNum) const
+bool MSPUBCollector::pageIsMaster(unsigned pageSeqNum) const
 {
   return m_masterPages.find(pageSeqNum) != m_masterPages.end();
 }
 
-bool libmspub::MSPUBCollector::go()
+bool MSPUBCollector::go()
 {
   addBlackToPaletteIfNecessary();
   assignShapesToPages();
+  m_painter->startDocument(librevenge::RVNGPropertyList());
+  m_painter->setDocumentMetaData(m_metaData);
+
+  for (std::list<EmbeddedFontInfo>::const_iterator i = m_embeddedFonts.begin(); i != m_embeddedFonts.end(); ++i)
+  {
+    librevenge::RVNGPropertyList props;
+    props.insert("librevenge:name", i->m_name);
+    props.insert("librevenge:mime-type", "application/vnd.ms-fontobject");
+    props.insert("office:binary-data",i->m_blob);
+    m_painter->defineEmbeddedFont(props);
+  }
+
   if (m_pageSeqNumsOrdered.empty())
   {
     for (std::map<unsigned, PageInfo>::const_iterator i = m_pagesBySeqNum.begin();
@@ -1457,11 +1739,12 @@ bool libmspub::MSPUBCollector::go()
       }
     }
   }
+  m_painter->endDocument();
   return true;
 }
 
 
-bool libmspub::MSPUBCollector::addTextString(const std::vector<TextParagraph> &str, unsigned id)
+bool MSPUBCollector::addTextString(const std::vector<TextParagraph> &str, unsigned id)
 {
   MSPUB_DEBUG_MSG(("addTextString, id: 0x%x\n", id));
   m_textStringsById[id] = str;
@@ -1472,7 +1755,7 @@ bool libmspub::MSPUBCollector::addTextString(const std::vector<TextParagraph> &s
   return true; //FIXME: Warn if the string already existed in the map.
 }
 
-void libmspub::MSPUBCollector::ponderStringEncoding(
+void MSPUBCollector::ponderStringEncoding(
   const std::vector<TextParagraph> &str)
 {
   for (unsigned i = 0; i < str.size(); ++i)
@@ -1485,30 +1768,30 @@ void libmspub::MSPUBCollector::ponderStringEncoding(
   }
 }
 
-void libmspub::MSPUBCollector::setWidthInEmu(unsigned long widthInEmu)
+void MSPUBCollector::setWidthInEmu(unsigned long widthInEmu)
 {
   //FIXME: Warn if this is called twice
   m_width = ((double)widthInEmu) / EMUS_IN_INCH;
   m_widthSet = true;
 }
 
-void libmspub::MSPUBCollector::setHeightInEmu(unsigned long heightInEmu)
+void MSPUBCollector::setHeightInEmu(unsigned long heightInEmu)
 {
   //FIXME: Warn if this is called twice
   m_height = ((double)heightInEmu) / EMUS_IN_INCH;
   m_heightSet = true;
 }
 
-bool libmspub::MSPUBCollector::addImage(unsigned index, ImgType type, WPXBinaryData img)
+bool MSPUBCollector::addImage(unsigned index, ImgType type, librevenge::RVNGBinaryData img)
 {
   while (m_images.size() < index)
   {
-    m_images.push_back(std::pair<ImgType, WPXBinaryData>(UNKNOWN, WPXBinaryData()));
+    m_images.push_back(std::pair<ImgType, librevenge::RVNGBinaryData>(UNKNOWN, librevenge::RVNGBinaryData()));
   }
   if (index > 0)
   {
-    MSPUB_DEBUG_MSG(("Image at index %d and of type 0x%x added.\n", index, type));
-    m_images[index - 1] = std::pair<ImgType, WPXBinaryData>(type, img);
+    MSPUB_DEBUG_MSG(("Image at index %u and of type 0x%x added.\n", index, type));
+    m_images[index - 1] = std::pair<ImgType, librevenge::RVNGBinaryData>(type, img);
   }
   else
   {
@@ -1517,8 +1800,8 @@ bool libmspub::MSPUBCollector::addImage(unsigned index, ImgType type, WPXBinaryD
   return index > 0;
 }
 
-WPXBinaryData *libmspub::MSPUBCollector::addBorderImage(ImgType type,
-    unsigned borderArtIndex)
+librevenge::RVNGBinaryData *MSPUBCollector::addBorderImage(ImgType type,
+                                                           unsigned borderArtIndex)
 {
   while (borderArtIndex >= m_borderImages.size())
   {
@@ -1528,7 +1811,7 @@ WPXBinaryData *libmspub::MSPUBCollector::addBorderImage(ImgType type,
   return &(m_borderImages[borderArtIndex].m_images.back().m_imgBlob);
 }
 
-void libmspub::MSPUBCollector::setBorderImageOffset(unsigned index, unsigned offset)
+void MSPUBCollector::setBorderImageOffset(unsigned index, unsigned offset)
 {
   while (index >= m_borderImages.size())
   {
@@ -1553,30 +1836,32 @@ void libmspub::MSPUBCollector::setBorderImageOffset(unsigned index, unsigned off
   }
 }
 
-void libmspub::MSPUBCollector::setShapePage(unsigned seqNum, unsigned pageSeqNum)
+void MSPUBCollector::setShapePage(unsigned seqNum, unsigned pageSeqNum)
 {
   m_shapeInfosBySeqNum[seqNum].m_pageSeqNum = pageSeqNum;
   m_pageSeqNumsByShapeSeqNum[seqNum] = pageSeqNum;
 }
 
-void libmspub::MSPUBCollector::addTextColor(ColorReference c)
+void MSPUBCollector::addTextColor(ColorReference c)
 {
   m_textColors.push_back(c);
 }
 
-void libmspub::MSPUBCollector::designateMasterPage(unsigned seqNum)
+void MSPUBCollector::designateMasterPage(unsigned seqNum)
 {
   m_masterPages.insert(seqNum);
 }
 
-void libmspub::MSPUBCollector::setMasterPage(unsigned seqNum, unsigned masterPageSeqNum)
+void MSPUBCollector::setMasterPage(unsigned seqNum, unsigned masterPageSeqNum)
 {
   m_masterPagesByPageSeqNum[seqNum] = masterPageSeqNum;
 }
 
-void libmspub::MSPUBCollector::setShapeCropType(unsigned seqNum, ShapeType cropType)
+void MSPUBCollector::setShapeCropType(unsigned seqNum, ShapeType cropType)
 {
   m_shapeInfosBySeqNum[seqNum].m_cropType = cropType;
+}
+
 }
 
 /* vim:set shiftwidth=2 softtabstop=2 expandtab: */

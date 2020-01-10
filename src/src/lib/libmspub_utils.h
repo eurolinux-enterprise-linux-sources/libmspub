@@ -1,30 +1,10 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* libmspub
- * Version: MPL 1.1 / GPLv2+ / LGPLv2+
+/*
+ * This file is part of the libmspub project.
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License or as specified alternatively below. You may obtain a copy of
- * the License at http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * Major Contributor(s):
- * Copyright (C) 2012-2013 Brennan Vincent <brennanv@email.arizona.edu>
- * Copyright (C) 2012 Fridrich Strba <fridrich.strba@bluewin.ch>
- *
- * All Rights Reserved.
- *
- * For minor contributions see the git repository.
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPLv2+"), or
- * the GNU Lesser General Public License Version 2 or later (the "LGPLv2+"),
- * in which case the provisions of the GPLv2+ or the LGPLv2+ are applicable
- * instead of those above.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
 #ifndef __LIBMSPUB_UTILS_H__
@@ -33,8 +13,8 @@
 #include <stdio.h>
 #include <vector>
 #include <map>
-#include <libwpd/libwpd.h>
-#include <libwpd-stream/libwpd-stream.h>
+#include <librevenge/librevenge.h>
+#include <librevenge-stream/librevenge-stream.h>
 
 #include "MSPUBTypes.h"
 
@@ -94,20 +74,20 @@ namespace libmspub
 const char *mimeByImgType(ImgType type);
 const char *windowsCharsetNameByOriginalCharset(const char *name);
 
-uint8_t readU8(WPXInputStream *input);
-uint16_t readU16(WPXInputStream *input);
-uint32_t readU32(WPXInputStream *input);
-uint64_t readU64(WPXInputStream *input);
-int8_t readS8(WPXInputStream *input);
-int16_t readS16(WPXInputStream *input);
-int32_t readS32(WPXInputStream *input);
-double readFixedPoint(WPXInputStream *input);
+uint8_t readU8(librevenge::RVNGInputStream *input);
+uint16_t readU16(librevenge::RVNGInputStream *input);
+uint32_t readU32(librevenge::RVNGInputStream *input);
+uint64_t readU64(librevenge::RVNGInputStream *input);
+int8_t readS8(librevenge::RVNGInputStream *input);
+int16_t readS16(librevenge::RVNGInputStream *input);
+int32_t readS32(librevenge::RVNGInputStream *input);
+double readFixedPoint(librevenge::RVNGInputStream *input);
 double toFixedPoint(int fp);
-void readNBytes(WPXInputStream *input, unsigned long length, std::vector<unsigned char> &out);
+void readNBytes(librevenge::RVNGInputStream *input, unsigned long length, std::vector<unsigned char> &out);
 
-void appendCharacters(WPXString &text, std::vector<unsigned char> characters, const char *encoding);
+void appendCharacters(librevenge::RVNGString &text, std::vector<unsigned char> characters, const char *encoding);
 
-bool stillReading(WPXInputStream *input, unsigned long until);
+bool stillReading(librevenge::RVNGInputStream *input, unsigned long until);
 
 void rotateCounter(double &x, double &y, double centerX, double centerY, short rotation);
 void flipIfNecessary(double &x, double &y, double centerX, double centerY, bool flipVertical, bool flipHorizontal);
@@ -141,7 +121,7 @@ class GenericException
 {
 };
 
-WPXBinaryData inflateData(WPXBinaryData);
+librevenge::RVNGBinaryData inflateData(librevenge::RVNGBinaryData);
 
 } // namespace libmspub
 

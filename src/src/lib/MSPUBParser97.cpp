@@ -1,29 +1,10 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* libmspub
- * Version: MPL 1.1 / GPLv2+ / LGPLv2+
+/*
+ * This file is part of the libmspub project.
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License or as specified alternatively below. You may obtain a copy of
- * the License at http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * Major Contributor(s):
- * Copyright (C) 2012-2013 Brennan Vincent <brennanv@email.arizona.edu>
- *
- * All Rights Reserved.
- *
- * For minor contributions see the git repository.
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPLv2+"), or
- * the GNU Lesser General Public License Version 2 or later (the "LGPLv2+"),
- * in which case the provisions of the GPLv2+ or the LGPLv2+ are applicable
- * instead of those above.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
 #include "MSPUBParser97.h"
@@ -31,25 +12,28 @@
 #include "libmspub_utils.h"
 #include "MSPUBTypes.h"
 
-libmspub::MSPUBParser97::MSPUBParser97(WPXInputStream *input, MSPUBCollector *collector)
+namespace libmspub
+{
+
+MSPUBParser97::MSPUBParser97(librevenge::RVNGInputStream *input, MSPUBCollector *collector)
   : MSPUBParser2k(input, collector), m_isBanner(false)
 {
   m_collector->useEncodingHeuristic();
 }
 
-unsigned short libmspub::MSPUBParser97::getTextMarker() const
+unsigned short MSPUBParser97::getTextMarker() const
 {
   return 0x0000;
 }
 
-unsigned libmspub::MSPUBParser97::getTextIdOffset() const
+unsigned MSPUBParser97::getTextIdOffset() const
 {
   return 0x46;
 }
 
-bool libmspub::MSPUBParser97::parse()
+bool MSPUBParser97::parse()
 {
-  WPXInputStream *contents = m_input->getDocumentOLEStream("Contents");
+  librevenge::RVNGInputStream *contents = m_input->getSubStreamByName("Contents");
   if (!contents)
   {
     MSPUB_DEBUG_MSG(("Couldn't get contents stream.\n"));
@@ -64,11 +48,11 @@ bool libmspub::MSPUBParser97::parse()
   return m_collector->go();
 }
 
-bool libmspub::MSPUBParser97::parseDocument(WPXInputStream *input)
+bool MSPUBParser97::parseDocument(librevenge::RVNGInputStream *input)
 {
-  if (!!m_documentChunkIndex)
+  if (bool(m_documentChunkIndex))
   {
-    input->seek(m_contentChunks[m_documentChunkIndex.get()].offset + 0x12, WPX_SEEK_SET);
+    input->seek(m_contentChunks[m_documentChunkIndex.get()].offset + 0x12, librevenge::RVNG_SEEK_SET);
     unsigned short coordinateSystemMark = readU16(input);
     m_isBanner = coordinateSystemMark == 0x0007;
     unsigned width = readU32(input);
@@ -80,11 +64,11 @@ bool libmspub::MSPUBParser97::parseDocument(WPXInputStream *input)
   return false;
 }
 
-void libmspub::MSPUBParser97::parseContentsTextIfNecessary(WPXInputStream *input)
+void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *input)
 {
-  input->seek(0x12, WPX_SEEK_SET);
-  input->seek(readU32(input), WPX_SEEK_SET);
-  input->seek(14, WPX_SEEK_CUR);
+  input->seek(0x12, librevenge::RVNG_SEEK_SET);
+  input->seek(readU32(input), librevenge::RVNG_SEEK_SET);
+  input->seek(14, librevenge::RVNG_SEEK_CUR);
   unsigned textStart = readU32(input);
   unsigned textEnd = readU32(input);
   unsigned prop1Index = readU16(input);
@@ -92,8 +76,8 @@ void libmspub::MSPUBParser97::parseContentsTextIfNecessary(WPXInputStream *input
   unsigned prop3Index = readU16(input);
   unsigned prop3End = readU16(input);
   std::vector<SpanInfo97> spanInfos = getSpansInfo(input, prop1Index,
-                                      prop2Index, prop3Index, prop3End);
-  input->seek(textStart, WPX_SEEK_SET);
+                                                   prop2Index, prop3Index, prop3End);
+  input->seek(textStart, librevenge::RVNG_SEEK_SET);
   TextInfo97 textInfo = getTextInfo(input, textEnd - textStart);
   unsigned iParaEnd = 0, iSpanEnd = 0;
   unsigned currentParaIndex = 0;
@@ -159,8 +143,8 @@ void libmspub::MSPUBParser97::parseContentsTextIfNecessary(WPXInputStream *input
   }
 }
 
-std::vector<libmspub::MSPUBParser97::SpanInfo97> libmspub::MSPUBParser97::getSpansInfo(
-  WPXInputStream *input,
+std::vector<MSPUBParser97::SpanInfo97> MSPUBParser97::getSpansInfo(
+  librevenge::RVNGInputStream *input,
   unsigned prop1Index, unsigned prop2Index, unsigned /* prop3Index */,
   unsigned /* prop3End */)
 {
@@ -169,9 +153,9 @@ std::vector<libmspub::MSPUBParser97::SpanInfo97> libmspub::MSPUBParser97::getSpa
   for (unsigned i = prop1Index; i < prop2Index; ++i)
   {
     unsigned offset = i * 0x200;
-    input->seek(offset + 0x1FF, WPX_SEEK_SET);
+    input->seek(offset + 0x1FF, librevenge::RVNG_SEEK_SET);
     unsigned numEntries = readU8(input);
-    input->seek(offset, WPX_SEEK_SET);
+    input->seek(offset, librevenge::RVNG_SEEK_SET);
     // Skip the first thing; it is not an end
     unsigned start = readU32(input);
     for (unsigned j = 0; j < numEntries; ++j)
@@ -187,7 +171,7 @@ std::vector<libmspub::MSPUBParser97::SpanInfo97> libmspub::MSPUBParser97::getSpa
     {
       ;
     }
-    input->seek(-1, WPX_SEEK_CUR);
+    input->seek(-1, librevenge::RVNG_SEEK_CUR);
     std::map<unsigned char, CharacterStyle> stylesByIndex;
     while (stillReading(input, offset + 0x1FF))
     {
@@ -196,7 +180,7 @@ std::vector<libmspub::MSPUBParser97::SpanInfo97> libmspub::MSPUBParser97::getSpa
       unsigned char index = static_cast<unsigned char>(
                               (input->tell() - 1 - offset) / 2);
       stylesByIndex[index] = readCharacterStyle(input, length);
-      input->seek(nextOffset, WPX_SEEK_SET);
+      input->seek(nextOffset, librevenge::RVNG_SEEK_SET);
     }
     for (unsigned j = 0; j < spanEnds.size(); ++j)
     {
@@ -207,8 +191,8 @@ std::vector<libmspub::MSPUBParser97::SpanInfo97> libmspub::MSPUBParser97::getSpa
   return ret;
 }
 
-libmspub::CharacterStyle libmspub::MSPUBParser97::readCharacterStyle(
-  WPXInputStream *input, unsigned length)
+CharacterStyle MSPUBParser97::readCharacterStyle(
+  librevenge::RVNGInputStream *input, unsigned length)
 {
   unsigned begin = input->tell();
   bool underline = false, italic = false, bold = false;
@@ -224,23 +208,23 @@ libmspub::CharacterStyle libmspub::MSPUBParser97::readCharacterStyle(
   }
   if (length >= 3)
   {
-    input->seek(begin + 0x2, WPX_SEEK_SET);
+    input->seek(begin + 0x2, librevenge::RVNG_SEEK_SET);
     fontIndex = readU8(input);
   }
   if (length >= 9)
   {
-    input->seek(begin + 0x8, WPX_SEEK_SET);
+    input->seek(begin + 0x8, librevenge::RVNG_SEEK_SET);
     underline = readU8(input) & 0x1;
   }
   if (length >= 5)
   {
-    input->seek(begin + 0x4, WPX_SEEK_SET);
+    input->seek(begin + 0x4, librevenge::RVNG_SEEK_SET);
     textSizeVariationFromDefault =
       length >= 6 ? readS16(input) : readS8(input);
   }
   if (length >= 16)
   {
-    input->seek(begin + 0xC, WPX_SEEK_SET);
+    input->seek(begin + 0xC, librevenge::RVNG_SEEK_SET);
     colorIndex = getColorIndexByQuillEntry(readU32(input));
   }
   double textSizeInPt = 10 +
@@ -249,7 +233,7 @@ libmspub::CharacterStyle libmspub::MSPUBParser97::readCharacterStyle(
                         fontIndex);
 }
 
-libmspub::MSPUBParser97::TextInfo97 libmspub::MSPUBParser97::getTextInfo(WPXInputStream *input, unsigned length)
+MSPUBParser97::TextInfo97 MSPUBParser97::getTextInfo(librevenge::RVNGInputStream *input, unsigned length)
 {
   std::vector<unsigned char> chars;
   chars.reserve(length);
@@ -273,7 +257,7 @@ libmspub::MSPUBParser97::TextInfo97 libmspub::MSPUBParser97::getTextInfo(WPXInpu
   return TextInfo97(chars, paragraphEnds, shapeEnds);
 }
 
-int libmspub::MSPUBParser97::translateCoordinateIfNecessary(int coordinate) const
+int MSPUBParser97::translateCoordinateIfNecessary(int coordinate) const
 {
   if (m_isBanner)
   {
@@ -285,24 +269,26 @@ int libmspub::MSPUBParser97::translateCoordinateIfNecessary(int coordinate) cons
   }
 }
 
-unsigned libmspub::MSPUBParser97::getFirstLineOffset() const
+unsigned MSPUBParser97::getFirstLineOffset() const
 {
   return 0x22;
 }
 
-unsigned libmspub::MSPUBParser97::getSecondLineOffset() const
+unsigned MSPUBParser97::getSecondLineOffset() const
 {
   return 0x2D;
 }
 
-unsigned libmspub::MSPUBParser97::getShapeFillTypeOffset() const
+unsigned MSPUBParser97::getShapeFillTypeOffset() const
 {
   return 0x20;
 }
 
-unsigned libmspub::MSPUBParser97::getShapeFillColorOffset() const
+unsigned MSPUBParser97::getShapeFillColorOffset() const
 {
   return 0x18;
+}
+
 }
 
 /* vim:set shiftwidth=2 softtabstop=2 expandtab: */

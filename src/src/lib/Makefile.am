@@ -8,66 +8,64 @@ lib_LTLIBRARIES = libmspub-@MSPUB_MAJOR_VERSION@.@MSPUB_MINOR_VERSION@.la
 libmspub_@MSPUB_MAJOR_VERSION@_@MSPUB_MINOR_VERSION@_includedir = $(includedir)/libmspub-@MSPUB_MAJOR_VERSION@.@MSPUB_MINOR_VERSION@/libmspub
 libmspub_@MSPUB_MAJOR_VERSION@_@MSPUB_MINOR_VERSION@_include_HEADERS = \
 	$(top_srcdir)/inc/libmspub/libmspub.h \
-	$(top_srcdir)/inc/libmspub/MSPUBDocument.h \
-	$(top_srcdir)/inc/libmspub/MSPUBStringVector.h
+	$(top_srcdir)/inc/libmspub/MSPUBDocument.h
 
-AM_CXXFLAGS = -I$(top_srcdir)/inc $(WPD_CFLAGS) $(WPG_CFLAGS) $(ZLIB_CFLAGS) $(ICU_CFLAGS) $(DEBUG_CXXFLAGS)
+AM_CXXFLAGS = -I$(top_srcdir)/inc $(REVENGE_CFLAGS) $(ZLIB_CFLAGS) $(ICU_CFLAGS) $(DEBUG_CXXFLAGS) -DLIBMSPUB_BUILD=1
 
-libmspub_@MSPUB_MAJOR_VERSION@_@MSPUB_MINOR_VERSION@_la_LIBADD  = $(WPD_LIBS) $(ZLIB_LIBS) $(ICU_LIBS) @LIBMSPUB_WIN32_RESOURCE@
+libmspub_@MSPUB_MAJOR_VERSION@_@MSPUB_MINOR_VERSION@_la_LIBADD  = $(REVENGE_LIBS) $(ZLIB_LIBS) $(ICU_LIBS) @LIBMSPUB_WIN32_RESOURCE@
 libmspub_@MSPUB_MAJOR_VERSION@_@MSPUB_MINOR_VERSION@_la_DEPENDENCIES = @LIBMSPUB_WIN32_RESOURCE@
 libmspub_@MSPUB_MAJOR_VERSION@_@MSPUB_MINOR_VERSION@_la_LDFLAGS = $(version_info) -export-dynamic -no-undefined
 libmspub_@MSPUB_MAJOR_VERSION@_@MSPUB_MINOR_VERSION@_la_SOURCES = \
-	MSPUBCollector.cpp \
-	MSPUBDocument.cpp \
-	MSPUBParser.cpp \
-	MSPUBParser2k.cpp \
-	MSPUBStringVector.cpp \
-	MSPUBSVGGenerator.cpp \
-	Fill.cpp \
-	libmspub_utils.cpp \
-	PolygonUtils.cpp \
-	ShapeGroupElement.cpp \
+	Arrow.h \
+	BorderArtInfo.h \
 	ColorReference.cpp \
-	VectorTransformation2D.cpp \
-	MSPUBParser97.cpp \
+	ColorReference.h \
+	Coordinate.h \
 	Dash.cpp \
-	Shadow.cpp \
+	Dash.h \
+	EmbeddedFontInfo.h \
 	EscherContainerType.h \
 	EscherFieldIds.h \
+	Fill.cpp \
+	Fill.h \
 	FillType.h \
+	Line.h \
+	ListInfo.h \
 	MSPUBBlockID.h \
 	MSPUBBlockType.h \
+	MSPUBCollector.cpp \
 	MSPUBCollector.h \
 	MSPUBConstants.h \
 	MSPUBContentChunkType.h \
+	MSPUBDocument.cpp \
+	MSPUBMetaData.cpp \
+	MSPUBMetaData.h \
+	MSPUBParser.cpp \
 	MSPUBParser.h \
+	MSPUBParser2k.cpp \
 	MSPUBParser2k.h \
-	MSPUBSVGGenerator.h \
+	MSPUBParser97.cpp \
+	MSPUBParser97.h \
 	MSPUBTypes.h \
-	libmspub_utils.h \
-	ShapeFlags.h \
-	ShapeType.h \
-	Fill.h \
-	ColorReference.h \
+	Margins.h \
+	NumberingDelimiter.h \
+	NumberingType.h \
+	PolygonUtils.cpp \
 	PolygonUtils.h \
-	Shapes.h \
-	VectorTransformation2D.h \
-	Coordinate.h \
+	Shadow.cpp \
+	Shadow.h \
+	ShapeFlags.h \
+	ShapeGroupElement.cpp \
 	ShapeGroupElement.h \
 	ShapeInfo.h \
-	Line.h \
-	Margins.h \
-	MSPUBParser97.h \
-	BorderArtInfo.h \
-	NumberingType.h \
-	NumberingDelimiter.h \
-	ListInfo.h \
-	Dash.h \
+	ShapeType.h \
+	Shapes.h \
 	TableInfo.h \
-	Arrow.h \
+	VectorTransformation2D.cpp \
+	VectorTransformation2D.h \
 	VerticalAlign.h \
-	EmbeddedFontInfo.h \
-	Shadow.h
+	libmspub_utils.cpp \
+	libmspub_utils.h
 
 if OS_WIN32
 

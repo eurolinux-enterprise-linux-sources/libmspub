@@ -1,29 +1,10 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* libmspub
- * Version: MPL 1.1 / GPLv2+ / LGPLv2+
+/*
+ * This file is part of the libmspub project.
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License or as specified alternatively below. You may obtain a copy of
- * the License at http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * Major Contributor(s):
- * Copyright (C) 2012 Brennan Vincent <brennanv@email.arizona.edu>
- *
- * All Rights Reserved.
- *
- * For minor contributions see the git repository.
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPLv2+"), or
- * the GNU Lesser General Public License Version 2 or later (the "LGPLv2+"),
- * in which case the provisions of the GPLv2+ or the LGPLv2+ are applicable
- * instead of those above.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
 #ifndef __MSPUBPARSER2K_H__
@@ -47,24 +28,24 @@ class MSPUBParser2k : public MSPUBParser
 
 protected:
   // helper functions
-  bool parse2kShapeChunk(const ContentChunkReference &chunk, WPXInputStream *input,
+  bool parse2kShapeChunk(const ContentChunkReference &chunk, librevenge::RVNGInputStream *input,
                          boost::optional<unsigned> pageSeqNum = boost::optional<unsigned>(),
                          bool topLevelCall = true);
-  void parseShapeLine(WPXInputStream *input, bool isRectangle, unsigned offset, unsigned seqNum);
-  void parseShapeType(WPXInputStream *input,
+  void parseShapeLine(librevenge::RVNGInputStream *input, bool isRectangle, unsigned offset, unsigned seqNum);
+  void parseShapeType(librevenge::RVNGInputStream *input,
                       unsigned seqNum, unsigned chunkOffset,
                       bool &isGroup, bool &isLine, bool &isImage, bool &isRectangle,
                       unsigned &flagsOffset);
-  void parseShapeRotation(WPXInputStream *input, bool isGroup, bool isLine, unsigned seqNum,
+  void parseShapeRotation(librevenge::RVNGInputStream *input, bool isGroup, bool isLine, unsigned seqNum,
                           unsigned chunkOffset);
-  void parseShapeFlips(WPXInputStream *input, unsigned flagsOffset, unsigned seqNum,
+  void parseShapeFlips(librevenge::RVNGInputStream *input, unsigned flagsOffset, unsigned seqNum,
                        unsigned chunkOffset);
-  void parseShapeCoordinates(WPXInputStream *input, unsigned seqNum, unsigned chunkOffset);
-  bool parseGroup(WPXInputStream *input, unsigned seqNum, unsigned page);
+  void parseShapeCoordinates(librevenge::RVNGInputStream *input, unsigned seqNum, unsigned chunkOffset);
+  bool parseGroup(librevenge::RVNGInputStream *input, unsigned seqNum, unsigned page);
   void assignShapeImgIndex(unsigned seqNum);
-  void parseShapeFill(WPXInputStream *input, unsigned seqNum, unsigned chunkOffset);
-  bool parseContents(WPXInputStream *input);
-  virtual bool parseDocument(WPXInputStream *input);
+  void parseShapeFill(librevenge::RVNGInputStream *input, unsigned seqNum, unsigned chunkOffset);
+  bool parseContents(librevenge::RVNGInputStream *input);
+  virtual bool parseDocument(librevenge::RVNGInputStream *input);
   virtual unsigned getColorIndexByQuillEntry(unsigned entry);
   virtual int translateCoordinateIfNecessary(int coordinate) const;
   virtual unsigned getFirstLineOffset() const;
@@ -77,9 +58,9 @@ protected:
   static Color getColorBy2kHex(unsigned hex);
   static unsigned translate2kColorReference(unsigned ref2k);
   static PageType getPageTypeBySeqNum(unsigned seqNum);
-  virtual void parseContentsTextIfNecessary(WPXInputStream *input);
+  virtual void parseContentsTextIfNecessary(librevenge::RVNGInputStream *input);
 public:
-  explicit MSPUBParser2k(WPXInputStream *input, MSPUBCollector *collector);
+  explicit MSPUBParser2k(librevenge::RVNGInputStream *input, MSPUBCollector *collector);
   virtual bool parse();
   virtual ~MSPUBParser2k();
 };

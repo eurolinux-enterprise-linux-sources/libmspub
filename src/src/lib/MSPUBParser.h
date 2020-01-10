@@ -1,30 +1,10 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* libmspub
- * Version: MPL 1.1 / GPLv2+ / LGPLv2+
+/*
+ * This file is part of the libmspub project.
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License or as specified alternatively below. You may obtain a copy of
- * the License at http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * Major Contributor(s):
- * Copyright (C) 2012 Brennan Vincent <brennanv@email.arizona.edu>
- * Copyright (C) 2012 Fridrich Strba <fridrich.strba@bluewin.ch>
- *
- * All Rights Reserved.
- *
- * For minor contributions see the git repository.
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPLv2+"), or
- * the GNU Lesser General Public License Version 2 or later (the "LGPLv2+"),
- * in which case the provisions of the GPLv2+ or the LGPLv2+ are applicable
- * instead of those above.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
 #ifndef __MSPUBPARSER_H__
@@ -38,15 +18,13 @@
 #include <boost/shared_ptr.hpp>
 #include <boost/optional.hpp>
 
-#include <libwpd/libwpd.h>
-#include <libwpg/libwpg.h>
+#include <librevenge/librevenge.h>
+#include <librevenge/librevenge.h>
 
 #include "MSPUBTypes.h"
 #include "Fill.h"
 #include "Coordinate.h"
 #include "PolygonUtils.h"
-
-class WPXInputStream;
 
 namespace libmspub
 {
@@ -85,7 +63,7 @@ struct FOPTValues
 class MSPUBParser
 {
 public:
-  explicit MSPUBParser(WPXInputStream *input, MSPUBCollector *collector);
+  explicit MSPUBParser(librevenge::RVNGInputStream *input, MSPUBCollector *collector);
   virtual ~MSPUBParser();
   virtual bool parse();
 protected:
@@ -112,45 +90,46 @@ protected:
   MSPUBParser();
   MSPUBParser(const MSPUBParser &);
   MSPUBParser &operator=(const MSPUBParser &);
-  virtual bool parseContents(WPXInputStream *input);
-  bool parseQuill(WPXInputStream *input);
-  bool parseEscher(WPXInputStream *input);
-  bool parseEscherDelay(WPXInputStream *input);
+  virtual bool parseContents(librevenge::RVNGInputStream *input);
+  bool parseMetaData(librevenge::RVNGInputStream *input);
+  bool parseQuill(librevenge::RVNGInputStream *input);
+  bool parseEscher(librevenge::RVNGInputStream *input);
+  bool parseEscherDelay(librevenge::RVNGInputStream *input);
 
-  MSPUBBlockInfo parseBlock(WPXInputStream *input, bool skipHierarchicalData = false);
-  EscherContainerInfo parseEscherContainer(WPXInputStream *input);
+  MSPUBBlockInfo parseBlock(librevenge::RVNGInputStream *input, bool skipHierarchicalData = false);
+  EscherContainerInfo parseEscherContainer(librevenge::RVNGInputStream *input);
 
-  bool parseContentChunkReference(WPXInputStream *input, MSPUBBlockInfo block);
-  QuillChunkReference parseQuillChunkReference(WPXInputStream *input);
-  bool parseDocumentChunk(WPXInputStream *input, const ContentChunkReference &chunk);
-  bool parsePageChunk(WPXInputStream *input, const ContentChunkReference &chunk);
-  bool parsePaletteChunk(WPXInputStream *input, const ContentChunkReference &chunk);
-  bool parsePageShapeList(WPXInputStream *input, MSPUBBlockInfo block, unsigned pageSeqNum);
-  bool parseShape(WPXInputStream *input, const ContentChunkReference &chunk);
-  bool parseBorderArtChunk(WPXInputStream *input,
+  bool parseContentChunkReference(librevenge::RVNGInputStream *input, MSPUBBlockInfo block);
+  QuillChunkReference parseQuillChunkReference(librevenge::RVNGInputStream *input);
+  bool parseDocumentChunk(librevenge::RVNGInputStream *input, const ContentChunkReference &chunk);
+  bool parsePageChunk(librevenge::RVNGInputStream *input, const ContentChunkReference &chunk);
+  bool parsePaletteChunk(librevenge::RVNGInputStream *input, const ContentChunkReference &chunk);
+  bool parsePageShapeList(librevenge::RVNGInputStream *input, MSPUBBlockInfo block, unsigned pageSeqNum);
+  bool parseShape(librevenge::RVNGInputStream *input, const ContentChunkReference &chunk);
+  bool parseBorderArtChunk(librevenge::RVNGInputStream *input,
                            const ContentChunkReference &chunk);
-  bool parseFontChunk(WPXInputStream *input,
+  bool parseFontChunk(librevenge::RVNGInputStream *input,
                       const ContentChunkReference &chunk);
-  void parsePaletteEntry(WPXInputStream *input, MSPUBBlockInfo block);
-  void parseColors(WPXInputStream *input, const QuillChunkReference &chunk);
-  void parseFonts(WPXInputStream *input, const QuillChunkReference &chunk);
-  void parseDefaultStyle(WPXInputStream *input, const QuillChunkReference &chunk);
-  void parseShapeGroup(WPXInputStream *input, const EscherContainerInfo &spgr, Coordinate parentCoordinateSystem, Coordinate parentGroupAbsoluteCoord);
-  void skipBlock(WPXInputStream *input, MSPUBBlockInfo block);
-  void parseEscherShape(WPXInputStream *input, const EscherContainerInfo &sp, Coordinate &parentCoordinateSystem, Coordinate &parentGroupAbsoluteCoord);
-  bool findEscherContainer(WPXInputStream *input, const EscherContainerInfo &parent, EscherContainerInfo &out, unsigned short type);
-  bool findEscherContainerWithTypeInSet(WPXInputStream *input, const EscherContainerInfo &parent, EscherContainerInfo &out, std::set<unsigned short> types);
-  std::map<unsigned short, unsigned> extractEscherValues(WPXInputStream *input, const EscherContainerInfo &record);
-  FOPTValues extractFOPTValues(WPXInputStream *input,
+  void parsePaletteEntry(librevenge::RVNGInputStream *input, MSPUBBlockInfo block);
+  void parseColors(librevenge::RVNGInputStream *input, const QuillChunkReference &chunk);
+  void parseFonts(librevenge::RVNGInputStream *input, const QuillChunkReference &chunk);
+  void parseDefaultStyle(librevenge::RVNGInputStream *input, const QuillChunkReference &chunk);
+  void parseShapeGroup(librevenge::RVNGInputStream *input, const EscherContainerInfo &spgr, Coordinate parentCoordinateSystem, Coordinate parentGroupAbsoluteCoord);
+  void skipBlock(librevenge::RVNGInputStream *input, MSPUBBlockInfo block);
+  void parseEscherShape(librevenge::RVNGInputStream *input, const EscherContainerInfo &sp, Coordinate &parentCoordinateSystem, Coordinate &parentGroupAbsoluteCoord);
+  bool findEscherContainer(librevenge::RVNGInputStream *input, const EscherContainerInfo &parent, EscherContainerInfo &out, unsigned short type);
+  bool findEscherContainerWithTypeInSet(librevenge::RVNGInputStream *input, const EscherContainerInfo &parent, EscherContainerInfo &out, std::set<unsigned short> types);
+  std::map<unsigned short, unsigned> extractEscherValues(librevenge::RVNGInputStream *input, const EscherContainerInfo &record);
+  FOPTValues extractFOPTValues(librevenge::RVNGInputStream *input,
                                const libmspub::EscherContainerInfo &record);
-  std::vector<TextSpanReference> parseCharacterStyles(WPXInputStream *input, const QuillChunkReference &chunk);
-  std::vector<TextParagraphReference> parseParagraphStyles(WPXInputStream *input, const QuillChunkReference &chunk);
+  std::vector<TextSpanReference> parseCharacterStyles(librevenge::RVNGInputStream *input, const QuillChunkReference &chunk);
+  std::vector<TextParagraphReference> parseParagraphStyles(librevenge::RVNGInputStream *input, const QuillChunkReference &chunk);
   std::vector<Calculation> parseGuides(const std::vector<unsigned char>
                                        &guideData);
   std::vector<Vertex> parseVertices(const std::vector<unsigned char>
                                     &vertexData);
-  std::vector<unsigned> parseTableCellDefinitions(WPXInputStream *input,
-      const QuillChunkReference &chunk);
+  std::vector<unsigned> parseTableCellDefinitions(librevenge::RVNGInputStream *input,
+                                                  const QuillChunkReference &chunk);
   std::vector<unsigned short> parseSegments(
     const std::vector<unsigned char> &segmentData);
   DynamicCustomShape getDynamicCustomShape(
@@ -158,13 +137,13 @@ protected:
     const std::vector<unsigned char> &segmentData,
     const std::vector<unsigned char> &guideData,
     unsigned geoWidth, unsigned geoHeight);
-  int getColorIndex(WPXInputStream *input, const MSPUBBlockInfo &info);
-  unsigned getFontIndex(WPXInputStream *input, const MSPUBBlockInfo &info);
-  CharacterStyle getCharacterStyle(WPXInputStream *input);
-  ParagraphStyle getParagraphStyle(WPXInputStream *input);
+  int getColorIndex(librevenge::RVNGInputStream *input, const MSPUBBlockInfo &info);
+  unsigned getFontIndex(librevenge::RVNGInputStream *input, const MSPUBBlockInfo &info);
+  CharacterStyle getCharacterStyle(librevenge::RVNGInputStream *input);
+  ParagraphStyle getParagraphStyle(librevenge::RVNGInputStream *input);
   boost::shared_ptr<Fill> getNewFill(const std::map<unsigned short, unsigned> &foptValues, bool &skipIfNotBg, std::map<unsigned short, std::vector<unsigned char> > &foptVal);
 
-  WPXInputStream *m_input;
+  librevenge::RVNGInputStream *m_input;
   MSPUBCollector *m_collector;
   std::vector<MSPUBBlockInfo> m_blockInfo;
   std::vector<ContentChunkReference> m_contentChunks;

@@ -1,45 +1,29 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* libmspub
- * Version: MPL 1.1 / GPLv2+ / LGPLv2+
+/*
+ * This file is part of the libmspub project.
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License or as specified alternatively below. You may obtain a copy of
- * the License at http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * Major Contributor(s):
- * Copyright (C) 2012 Brennan Vincent <brennanv@email.arizona.edu>
- *
- * All Rights Reserved.
- *
- * For minor contributions see the git repository.
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPLv2+"), or
- * the GNU Lesser General Public License Version 2 or later (the "LGPLv2+"),
- * in which case the provisions of the GPLv2+ or the LGPLv2+ are applicable
- * instead of those above.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
 #include "Dash.h"
 #include "libmspub_utils.h"
 
-bool libmspub::operator==(const libmspub::Dot &lhs, const libmspub::Dot &rhs)
+namespace libmspub
+{
+
+bool operator==(const Dot &lhs, const Dot &rhs)
 {
   return lhs.m_length == rhs.m_length && lhs.m_count == rhs.m_count;
 }
 
-bool libmspub::operator!=(const libmspub::Dot &lhs, const libmspub::Dot &rhs)
+bool operator!=(const Dot &lhs, const Dot &rhs)
 {
   return !operator==(lhs, rhs);
 }
 
-bool libmspub::operator==(const libmspub::Dash &lhs, const libmspub::Dash &rhs)
+bool operator==(const Dash &lhs, const Dash &rhs)
 {
   if (!(lhs.m_distance == rhs.m_distance &&
         lhs.m_dotStyle == rhs.m_dotStyle && lhs.m_dots.size() == rhs.m_dots.size()))
@@ -56,8 +40,8 @@ bool libmspub::operator==(const libmspub::Dash &lhs, const libmspub::Dash &rhs)
   return true;
 }
 
-libmspub::Dash libmspub::getDash(MSPUBDashStyle style, unsigned shapeLineWidthEmu,
-                                 DotStyle dotStyle)
+Dash getDash(MSPUBDashStyle style, unsigned shapeLineWidthEmu,
+             DotStyle dotStyle)
 {
   double shapeLineWidth = static_cast<double>(shapeLineWidthEmu) /
                           EMUS_IN_INCH;
@@ -133,6 +117,8 @@ libmspub::Dash libmspub::getDash(MSPUBDashStyle style, unsigned shapeLineWidthEm
     return ret;
   }
   }
+}
+
 }
 
 /* vim:set shiftwidth=2 softtabstop=2 expandtab: */

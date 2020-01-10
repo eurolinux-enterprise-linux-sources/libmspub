@@ -1,3 +1,384 @@
+2014-12-30  David Tardon  <dtardon@redhat.com>  [fc4fdd7b1ab4278d14c88946f2c837d7eb4d880f]
+
+	flush remaining text before checking spans
+
+	Change-Id: I6938b0b13959a3ee83cfecae728c0a1a7baf531f
+
+2014-12-30  David Tardon  <dtardon@redhat.com>  [b42a9c54d0fceec246dd4fef8679898efd611d60]
+
+	coverity#1261355 using invalid iterator
+
+	Change-Id: I9dfdfa89e2e1d895ea4d669a2dad480c5a8966ad
+
+2014-12-30  David Tardon  <dtardon@redhat.com>  [d0e7664ffef9bafce5664948f03118fda3810002]
+
+	prepare for a release
+
+	Change-Id: I5569201cb5a41640ee786d3e0a7814c3e0e907d6
+
+2014-12-30  David Tardon  <dtardon@redhat.com>  [7d50db7ceeda663451ef2fe6cbc9ea0d25668e1e]
+
+	fix parsing of escher values
+
+	The list of (ID, value) pairs is terminated by ID == 0 without a value.
+	So, the shortest possible record has length 8: 2 byte ID, followed by 4
+	byte value, followed by 2 byte terminator ID.
+
+	Change-Id: I4501e42164b4376f16feca21e32221a4084f22f4
+
+2014-12-30  David Tardon  <dtardon@redhat.com>  [a5aa054c0996cc4e8c428a88c7f14c18e4e4e57e]
+
+	import metadata
+
+	Change-Id: I64dc77ef7f2e12a5d9f2358b1ebaa5e593282414
+
+2014-12-30  David Tardon  <dtardon@redhat.com>  [09a84ccf477902196fc94c71f9bc244e2e28ae5c]
+
+	keep the sources list sorted
+
+	Change-Id: I61061f8f43be40cc3f886a29a74c31dc39d4893f
+
+2014-12-30  David Tardon  <dtardon@redhat.com>  [3b6a71216cab7172b947dbb6946f8dcb8b81792d]
+
+	fix warning
+
+	Change-Id: I77492d801c43d178be210323ef1dafc7eefdacb6
+
+2014-12-29  David Tardon  <dtardon@redhat.com>  [630ed6296456fe14c08a25dda703a221280a00c2]
+
+	fix parsing of docs with multiple tables
+
+	Change-Id: I4f8141a6fe71db283b698b67819e5ed00aed3860
+
+2014-12-29  David Tardon  <dtardon@redhat.com>  [f2062c912b0deb340cb7d4c55d027e7d26cf0f59]
+
+	astyle
+
+	Change-Id: Ifd955b803ca0ab6b1c3fb93c947320d846c537ed
+
+2014-12-29  David Tardon  <dtardon@redhat.com>  [b3ac66dd7a7a4d9d1ed92ffc34a456fef695127e]
+
+	cells are not always saved in L->R T->B order
+
+	As an additional bonus, this simplifies the output loop.
+
+	Change-Id: I2ae1eab52d3681c02e790af950c82a7f01d3aa11
+
+2014-12-29  David Tardon  <dtardon@redhat.com>  [04b14a279a51a1ab88e304cabf776a060e1f19b5]
+
+	fix debug build
+
+	Change-Id: I651c495d21f4c6869bb0ecb01a7b6f02f3dcbf3f
+
+2014-12-28  David Tardon  <dtardon@redhat.com>  [3b6efdb66e92c4d3d93daa56930ead86bf4fb96a]
+
+	handle merged cells
+
+	Change-Id: I32c416d89e18d780d852a900f16a35d14531c209
+
+2014-12-28  David Tardon  <dtardon@redhat.com>  [82f18199d17bb4da46b2728f7dfc477eac984bc2]
+
+	BIPU handling of tables
+
+	Change-Id: I99b127f651c20d7024a3f7db881b386424f334d0
+
+2014-12-28  David Tardon  <dtardon@redhat.com>  [58ad1f151731706d450b64d00e1ce12653396cf6]
+
+	handle text content of a table
+
+	Change-Id: I7eec32aeff3b6ac109b6abae9fcb61f46efb27bb
+
+2014-12-26  David Tardon  <dtardon@redhat.com>  [7e994d4632e382df6aeccdab0f3408c8d3dc112b]
+
+	drop trailing 0 when reading embedded font name
+
+	Change-Id: Iaf8a0f9d8a38c9316f9f1e411a8f9d0f4e89e252
+
+2014-12-26  David Tardon  <dtardon@redhat.com>  [b99d016d1e43d9ef99c6f3f94a345a189212a117]
+
+	simplify this
+
+	Change-Id: I6a39f76a0019d057b20a4abb29479754ad622b39
+
+2014-12-26  David Tardon  <dtardon@redhat.com>  [525d9d714be08629ac8c70bf415f2231c4f910b3]
+
+	replace double negation by bool()
+
+	Change-Id: Ibd72d22c86e8960dd3553fa1406098c8138dae36
+
+2014-12-26  David Tardon  <dtardon@redhat.com>  [cc3724d73551b23dc370f865652c14a739e45a00]
+
+	handle embedded fonts
+
+	Change-Id: Ifeb92312aaadf17284c47c25109737cf7ffb6024
+
+2014-12-23  David Tardon  <dtardon@redhat.com>  [567788c7a99abeb116dd202dbbe1a04eb7a05c2a]
+
+	afl: avoid infinite loop
+
+	Change-Id: I13ca72e1328c38f9c6b8da5c5e11b6944d5863a6
+
+2014-11-25  David Tardon  <dtardon@redhat.com>  [0ab2f4869b5d5f43a3793ae7e556bd5825609552]
+
+	do not dereference past-the-end iterator
+
+	Change-Id: I93b300e79163c9fb6a6f32f937c75e6265f1c5b7
+
+2014-11-25  David Tardon  <dtardon@redhat.com>  [b33edc1675cec963340466627973fba070d2747d]
+
+	do not dereference past-the-end iterator
+
+	Change-Id: Icef6e8a324f85c51c27dd03a03ca1c37e4b01bc1
+
+2014-11-24  David Tardon  <dtardon@redhat.com>  [616f5070061e28c54cbb513859141e02f4fd5dc6]
+
+	add compile script to .gitignore
+
+	Change-Id: I543c0db6c0d00e5c68fac05031a99204dd716d4b
+
+2014-11-24  David Tardon  <dtardon@redhat.com>  [c5c20a694baa5629ddb65ea37f19da89411887fe]
+
+	only export public symbols
+
+
+2014-07-29  David Tardon  <dtardon@redhat.com>  [0909d5efcdc948ab455e14f718114c53fd8f52bc]
+
+	check input
+
+	Change-Id: I117ffe49fd6be34b07b094f0671244500ab44a53
+
+2014-07-01  David Tardon  <dtardon@redhat.com>  [5e582134513e0250c544c4648e305c7d2b2cf829]
+
+	prepare for a release
+
+	Change-Id: Ib9639819752e592930fe304809558ab20923c1d5
+
+2014-07-01  David Tardon  <dtardon@redhat.com>  [5a03f9a1aaf8e9255a1c6a7fa7015bde0eecf0dd]
+
+	put all symbols into namespace libmspub
+
+	Change-Id: I0a918d738288838f059f7606bd00979cbe4cc99a
+
+2014-07-01  David Tardon  <dtardon@redhat.com>  [50e45a89147807dadb301cc7b6ba934806ae269a]
+
+	fdo#80661 clash with a global symbol from libreoffice
+
+	Change-Id: I7d556a5a207b055342a0b369cc0cb800b60014df
+
+2014-06-02  David Tardon  <dtardon@redhat.com>  [3cbc8206090b1843db5a6838d159d6aad67c486e]
+
+	need librevenge 0.0.1 now
+
+	Change-Id: I957ff9edb3c019b489fdcfed532c25694ba6c6e4
+
+2014-06-02  David Tardon  <dtardon@redhat.com>  [e0da5267d2a86360731f848130ac500419fac0fd]
+
+	coverity#1132886 missing break in switch
+
+	Change-Id: I93facc400851d4ec698769a4bc665859b0fa0245
+
+2014-06-02  David Tardon  <dtardon@redhat.com>  [0af593e3b4bdfcc016a54acd53c56ed303ef476d]
+
+	const_cast is no longer necessary
+
+	Change-Id: I8573498decad389693da324f7e3132e91fc71bb8
+
+2014-06-02  David Tardon  <dtardon@redhat.com>  [6fb847a013c351af04125b4c7e5a9aaab861afde]
+
+	coverity#1219715 dereference after null check
+
+	Change-Id: I36ddbef50da52dcf1e22b47d94a759606fd818a2
+
+2014-05-23  David Tardon  <dtardon@redhat.com>  [d731971eba5bac0859a7be23249842d1ff572f7a]
+
+	prepare for a release
+
+	Change-Id: I0a52eb61623ee9da6912930136071e8aacc17786
+
+2014-04-16  David Tardon  <dtardon@redhat.com>  [76d5e65866c042b54b70e64f230b9fa66e24a0a2]
+
+	add requires for other projects
+
+	Change-Id: Id25d39aa06cddb06783a30f4ad961e1618c8275e
+
+2014-04-16  David Tardon  <dtardon@redhat.com>  [53233cdbfeba8fbb7914f1825b100681f64e716f]
+
+	require librevenge-stream too
+
+	Change-Id: I023a16c7d7abaa3cd68c047b32c8c6163e0fe36f
+
+2014-01-31  Fridrich Štrba  <fridrich.strba@bluewin.ch>  [f65e2bc75d247044d8def59ced35cf1f63da71f3]
+
+	With agreement of all contributors, simplifying licensing to MPL2
+
+	Change-Id: Ie051167443758c7db08072d5c322d38ac5ddc56a
+
+2013-12-18  Fridrich Štrba  <fridrich.strba@bluewin.ch>  [30cead30b424282664a70f28636ab290ac7267fb]
+
+	Export only needed stuff on Windows
+
+	Change-Id: I276cdce38ad9b2a8a62ded67f7d34a5bca6a698f
+
+2013-12-11  Fridrich Štrba  <fridrich.strba@bluewin.ch>  [d452d5853bd3f2c94f9f796d4f2e59d211dbbfee]
+
+	Re-astyle
+
+	Change-Id: I07970ababe907fff2595f605abebb91fbd10db85
+
+2013-12-11  Fridrich Štrba  <fridrich.strba@bluewin.ch>  [8cb37e2404b3fe621af0ab5f36bbb2754d30def0]
+
+	Allow equal identing of functions
+
+
+2013-12-03  Fridrich Štrba  <fridrich.strba@bluewin.ch>  [3e9dfdccfa58447677d8e6404933229282bd6ae4]
+
+	Separate tabs, spaces and line-breaks from text
+
+	Change-Id: I11a1405914fcc38400c5ce28cb37e4330e72b0aa
+
+2013-12-03  Fridrich Štrba  <fridrich.strba@bluewin.ch>  [614a0f673bb0b74265992e53595d5b7013de49c0]
+
+	Add startDocument and endDocument calls
+
+	Change-Id: Iebf9a13d01f2d1e167345c6339fe3b97fc2b4381
+
+2013-11-30  Fridrich Štrba  <fridrich.strba@bluewin.ch>  [78cfbdf6bd95ba24f5f8990b28fabbe5aa9cbad5]
+
+	Allow pub2raw output callgraph
+
+	Change-Id: I03482201ff551ddb5849cc29f844ba8271060485
+
+2013-11-28  David Tardon  <dtardon@redhat.com>  [0f3bf67a950fd340d0a8c99f2b74817859db8733]
+
+	add options file for astyle
+
+	Change-Id: Ifa12207d6d3bde25af615b293ca1f18c839a3a2f
+
+2013-11-28  David Tardon  <dtardon@redhat.com>  [5b7bc93516950d0155bbe6b6f7124db29868c26d]
+
+	add myself to AUTHORS
+
+	Change-Id: Ied4ff9ffc5b1bfa40a62d98362a19abf68716681
+
+2013-11-28  David Tardon  <dtardon@redhat.com>  [a4b471c30accd9f7a9236fba8a3f77e72607a748]
+
+	document the current astyle settings
+
+	Change-Id: I58817abf4237923cff870a52151c899694262e35
+
+2013-11-25  Fridrich Štrba  <fridrich.strba@bluewin.ch>  [dc74c1d6918ad6531daf6c1bd8e0c3fcd84b7155]
+
+	astyle -HU -A1 -k3 -y -n -s2 -r \*.cpp \*.h
+
+	Change-Id: I58b1148474af8440672d623385440cfee275f472
+
+2013-11-23  Fridrich Štrba  <fridrich.strba@bluewin.ch>  [ee40d82a8a93584b3cb3dce17de5e22ecbc52aea]
+
+	drawPoly*: vertices -> "svg:points"
+
+	Change-Id: Ic1a37ae6c2cf63fde1acd943a27a4ac668dd45b9
+
+2013-11-23  Fridrich Štrba  <fridrich.strba@bluewin.ch>  [ca3f8827c850268cebf6cdcf37048ea809bf0398]
+
+	Fold in the gradient
+
+	Change-Id: I64d42e3a485af5933aec1e9441fcc46600db2a4e
+
+2013-11-21  Fridrich Štrba  <fridrich.strba@bluewin.ch>  [cb229d42dc762d7d3f43a59e43d24afd773d5a2b]
+
+	Fold tabStops into the propList
+
+	Change-Id: Iab436fa599b6836a8a8f7659cd18ed38cbd3911d
+
+2013-11-20  Fridrich Štrba  <fridrich.strba@bluewin.ch>  [4a37910aafea0a69be1377045239244d1ce0f7e0]
+
+	Astyle
+
+	Change-Id: Iefe93634d0573d57a95c1c0b96848db2f4ec2b8c
+
+2013-11-20  Fridrich Štrba  <fridrich.strba@bluewin.ch>  [8f538353e8a2bc698fa7fb793737950a6f46afb0]
+
+	Fold paths into property lists
+
+	Change-Id: Ic69f12aa3be7cea1047fd481b913df6ab25974f3
+
+2013-11-14  Fridrich Štrba  <fridrich.strba@bluewin.ch>  [c3e812fd9e15e41ca4d1dc3ff0e438c5afa05257]
+
+	Adapt to API change in librevenge
+
+	Change-Id: I55f75085307279ab280c3645ff4ccc993615fa90
+
+2013-11-07  Fridrich Štrba  <fridrich.strba@bluewin.ch>  [1eebf9a725a30cd64c041533c8671f01d37d53db]
+
+	Make --disable-tools effective
+
+	Change-Id: Iba7371e85e1fdb17c0be5b364cbfcb9e3a5c47f9
+
+2013-11-07  Fridrich Štrba  <fridrich.strba@bluewin.ch>  [4cfda485b13728ea31de466d986a171251e1f3fa]
+
+	Port to librevenge
+
+	Change-Id: I975b5a248bee8ce74a32bf48606a1516c0692308
+
+2013-11-03  Julien Nabet  <serval2412@yahoo.fr>  [6aa8753461a537aadd2180ebc3d98962bd2224cb]
+
+	Some cppcheck cleaning
+
+
+2013-09-03  David Tardon  <dtardon@redhat.com>  [0477515f72618f05e92108d619a0aeb67895dfe2]
+
+	add cgit/gitweb URLs to the repo
+
+	Change-Id: I9231c621faafdd2cc67f9b066254f0cff61f9170
+	Reviewed-on: https://gerrit.libreoffice.org/5778
+	Reviewed-by: David Tardon <dtardon@redhat.com>
+	Tested-by: David Tardon <dtardon@redhat.com>
+
+2013-09-03  David Tardon  <dtardon@redhat.com>  [0ec56109b2df0776b8ff0c921209a58ba655541b]
+
+	set up git-review
+
+
+2013-09-02  David Tardon  <dtardon@redhat.com>  [c78f10c2a2979008c18f33f7bf8f0238cc144089]
+
+	add README
+
+
+2013-09-02  Norbert Thiebaud  <nthiebaud@gmail.com>  [bcfdbefbef551f57f9fc9a5bf5f53bb7f7a85ab1]
+
+	add automatic git hook setting in autogen.sh
+
+	Change-Id: I95eb02dc2d347337d7b85f85d6459353278fb137
+	Reviewed-on: https://gerrit.libreoffice.org/5749
+	Reviewed-by: Fridrich Strba <fridrich@documentfoundation.org>
+	Tested-by: Fridrich Strba <fridrich@documentfoundation.org>
+
+2013-07-26  David Tardon  <dtardon@redhat.com>  [938e918d3a02dd2b1f741ca65c70c61e9e8bf7bb]
+
+	drop pragmas disabling warnings
+
+	If there is (still) a problem, I would rather fix it than hide it.
+
+2013-07-06  David Tardon  <dtardon@redhat.com>  [7a6889b490ca80db4115612b9e441d698374cac0]
+
+	astyle
+
+
+2013-07-06  David Tardon  <dtardon@redhat.com>  [fad540e1d43c95b7173c8ddb7bb81e4ab5c9f21a]
+
+	the extra variable is not needed
+
+
+2013-07-06  David Tardon  <dtardon@redhat.com>  [d0a51bca47dd4b4c23c17dcf332f9f3831dd049f]
+
+	only compute image type once
+
+
+2013-06-06  Fridrich Štrba  <fridrich.strba@bluewin.ch>  [53293cd3472444cbe87ab5c22ea4b81b18d53896]
+
+	Adapting doxygen to the new layout
+
+
 2013-05-13  Fridrich Štrba  <fridrich.strba@bluewin.ch>  [83713ac1c8b614fb28a65a7163a6123acf3918a7]
 
 	Bumping version to 0.0.6

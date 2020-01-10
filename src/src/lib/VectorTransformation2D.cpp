@@ -1,43 +1,26 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* libmspub
- * Version: MPL 1.1 / GPLv2+ / LGPLv2+
+/*
+ * This file is part of the libmspub project.
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License or as specified alternatively below. You may obtain a copy of
- * the License at http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * Major Contributor(s):
- * Copyright (C) 2012 Brennan Vincent <brennanv@email.arizona.edu>
- *
- * All Rights Reserved.
- *
- * For minor contributions see the git repository.
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPLv2+"), or
- * the GNU Lesser General Public License Version 2 or later (the "LGPLv2+"),
- * in which case the provisions of the GPLv2+ or the LGPLv2+ are applicable
- * instead of those above.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
-
 
 //TODO : Adjust handles, glue points
 
 #include "VectorTransformation2D.h"
 #include <math.h>
 
-libmspub::VectorTransformation2D::VectorTransformation2D() : m_m11(1), m_m12(0), m_m21(0), m_m22(1), m_x(0), m_y(0)
+namespace libmspub
+{
+
+VectorTransformation2D::VectorTransformation2D() : m_m11(1), m_m12(0), m_m21(0), m_m22(1), m_x(0), m_y(0)
 {
 }
 
 //We choose by convention to make function composition LEFT-multiplication, rather than right.
-libmspub::VectorTransformation2D libmspub::operator*(const VectorTransformation2D &l, const VectorTransformation2D &r)
+VectorTransformation2D operator*(const VectorTransformation2D &l, const VectorTransformation2D &r)
 {
   VectorTransformation2D ret;
   ret.m_m11 = l.m_m11 * r.m_m11 + l.m_m12 * r.m_m21;
@@ -49,7 +32,7 @@ libmspub::VectorTransformation2D libmspub::operator*(const VectorTransformation2
   return ret;
 }
 
-libmspub::VectorTransformation2D libmspub::VectorTransformation2D::fromFlips(bool flipH, bool flipV)
+VectorTransformation2D VectorTransformation2D::fromFlips(bool flipH, bool flipV)
 {
   VectorTransformation2D ret;
   ret.m_m21 = ret.m_m12 = 0;
@@ -58,7 +41,7 @@ libmspub::VectorTransformation2D libmspub::VectorTransformation2D::fromFlips(boo
   return ret;
 }
 
-libmspub::VectorTransformation2D libmspub::VectorTransformation2D::fromTranslate(double x, double y)
+VectorTransformation2D VectorTransformation2D::fromTranslate(double x, double y)
 {
   VectorTransformation2D ret;
   ret.m_m11 = ret.m_m22 = 1;
@@ -68,7 +51,7 @@ libmspub::VectorTransformation2D libmspub::VectorTransformation2D::fromTranslate
   return ret;
 }
 
-libmspub::VectorTransformation2D libmspub::VectorTransformation2D::fromCounterRadians(double theta)
+VectorTransformation2D VectorTransformation2D::fromCounterRadians(double theta)
 {
   VectorTransformation2D ret;
   ret.m_m11 = cos(theta);
@@ -78,33 +61,33 @@ libmspub::VectorTransformation2D libmspub::VectorTransformation2D::fromCounterRa
   return ret;
 }
 
-libmspub::Vector2D libmspub::VectorTransformation2D::transform(Vector2D v) const
+Vector2D VectorTransformation2D::transform(Vector2D v) const
 {
   double x = m_m11 * v.m_x + m_m12 * v.m_y + m_x;
   double y = m_m21 * v.m_x + m_m22 * v.m_y + m_y;
   return Vector2D(x, y);
 }
 
-libmspub::Vector2D libmspub::VectorTransformation2D::transformWithOrigin(Vector2D v, Vector2D origin) const
+Vector2D VectorTransformation2D::transformWithOrigin(Vector2D v, Vector2D origin) const
 {
   return transform(v - origin) + origin;
 }
 
-libmspub::Vector2D libmspub::operator+(const Vector2D &l, const Vector2D &r)
+Vector2D operator+(const Vector2D &l, const Vector2D &r)
 {
   double x = l.m_x + r.m_x;
   double y = l.m_y + r.m_y;
   return Vector2D(x, y);
 }
 
-libmspub::Vector2D libmspub::operator-(const Vector2D &l, const Vector2D &r)
+Vector2D operator-(const Vector2D &l, const Vector2D &r)
 {
   double x = l.m_x - r.m_x;
   double y = l.m_y - r.m_y;
   return Vector2D(x, y);
 }
 
-double libmspub::VectorTransformation2D::getRotation() const
+double VectorTransformation2D::getRotation() const
 {
   if (fabs(getHorizontalScaling()) > 0.0001)
   {
@@ -117,19 +100,22 @@ double libmspub::VectorTransformation2D::getRotation() const
   return 0;
 }
 
-double libmspub::VectorTransformation2D::getHorizontalScaling() const
+double VectorTransformation2D::getHorizontalScaling() const
 {
   return m_m11 * m_m11 + m_m21 * m_m21;
 }
 
-double libmspub::VectorTransformation2D::getVerticalScaling() const
+double VectorTransformation2D::getVerticalScaling() const
 {
   return m_m12 * m_m12 + m_m22 * m_m22;
 }
 
-bool libmspub::VectorTransformation2D::orientationReversing() const
+bool VectorTransformation2D::orientationReversing() const
 {
   // Is the determinant negative?
   return m_m11 * m_m22 < m_m12 * m_m21;
 }
+
+}
+
 /* vim:set shiftwidth=2 softtabstop=2 expandtab: */
