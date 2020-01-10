@@ -2,7 +2,7 @@
 
 Name: libmspub
 Version: 0.0.6
-Release: 1%{?dist}
+Release: 3%{?dist}
 Summary: A library providing ability to interpret and import Microsoft Publisher files
 
 Group: System Environment/Libraries
@@ -97,6 +97,12 @@ rm -f %{buildroot}/%{_libdir}/*.la
 
 
 %changelog
+* Fri Jan 24 2014 Daniel Mach <dmach@redhat.com> - 0.0.6-3
+- Mass rebuild 2014-01-24
+
+* Fri Dec 27 2013 Daniel Mach <dmach@redhat.com> - 0.0.6-2
+- Mass rebuild 2013-12-27
+
 * Tue May 14 2013 David Tardon <dtardon@redhat.com> - 0.0.6-1
 - new release
 
